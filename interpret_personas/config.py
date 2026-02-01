@@ -18,7 +18,9 @@ class GenerationConfig:
     output_dir: Path
     question_mode: str = "general"  # "general" or "role_specific"
     max_model_len: int = 2048
+    gpu_memory_utilization: float = 0.95
     temperature: float = 0.7
+    top_p: float = 0.9
     max_tokens: int = 512
     prompt_indices: list[int] = field(default_factory=lambda: [0, 1, 2, 3, 4])
     model_short_name: str = field(init=False)
@@ -60,8 +62,14 @@ class GenerationConfig:
 
         if self.max_model_len <= 0:
             raise ValueError(f"max_model_len must be positive: {self.max_model_len}")
+        if not 0 < self.gpu_memory_utilization <= 1:
+            raise ValueError(
+                f"gpu_memory_utilization must be in (0, 1]: {self.gpu_memory_utilization}"
+            )
         if not 0 <= self.temperature <= 2:
             raise ValueError(f"temperature must be in [0, 2]: {self.temperature}")
+        if not 0 < self.top_p <= 1:
+            raise ValueError(f"top_p must be in (0, 1]: {self.top_p}")
         if self.max_tokens <= 0:
             raise ValueError(f"max_tokens must be positive: {self.max_tokens}")
         if not self.prompt_indices:

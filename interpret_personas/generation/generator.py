@@ -33,11 +33,13 @@ class VLLMGenerator:
         self.llm = LLM(
             model=config.model_name,
             max_model_len=config.max_model_len,
+            gpu_memory_utilization=config.gpu_memory_utilization,
             trust_remote_code=True,
         )
 
         self.sampling_params = SamplingParams(
             temperature=config.temperature,
+            top_p=config.top_p,
             max_tokens=config.max_tokens,
         )
 
