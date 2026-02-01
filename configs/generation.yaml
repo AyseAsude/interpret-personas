@@ -1,0 +1,22 @@
+# Generation Configuration
+# Configuration for response generation using vLLM
+
+model_name: "google/gemma-2-27b-it"
+
+# Question mode: "general" or "role_specific"
+# - "general": All roles use general questions from extraction_questions.jsonl
+# - "role_specific": All roles use their role-specific questions
+question_mode: "general"
+
+roles_dir: "data/roles/instructions"
+general_questions_file: "data/extraction_questions.jsonl"
+# Output base directory (actual path will be: {output_dir}/{question_mode}/{model_name})
+output_dir: "outputs/responses"
+
+# vLLM settings
+max_model_len: 2048
+temperature: 0.7
+max_tokens: 512
+
+# Prompt indices to use (0-4 for 5 instruction variants)
+prompt_indices: [0, 1, 2, 3, 4]

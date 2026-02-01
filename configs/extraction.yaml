@@ -1,0 +1,15 @@
+# Extraction Configuration
+# Configuration for SAE feature extraction
+
+model_name: "google/gemma-3-27b-it"
+
+# SAE settings
+sae_release: "gemma-scope-2-27b-it-res"
+sae_id: "layer_40_width_65k_l0_medium"
+
+# Paths (must match question_mode from generation config)
+responses_dir: "outputs/responses/general/gemma-3-27b-it"
+output_dir: "outputs/features/general/gemma-3-27b-it_layer_40_width_65k_l0_medium"
+
+# Processing settings
+token_selection: "response_only"  # "response_only" or "all"

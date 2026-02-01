@@ -1,0 +1,5 @@
+# Aggregation Configuration
+
+# Paths (must match question_mode from generation/extraction configs)
+features_dir: "outputs/features/general/gemma-2-27b-it_layer_20_width_16k"
+output_dir: "outputs/aggregated/general/gemma-2-27b-it_layer_20_width_16k"
