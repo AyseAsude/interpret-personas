@@ -7,7 +7,7 @@ name = "interpret-personas"
 version = "0.1.0"
 description = "Mechanistic interpretability pipeline for extracting and analyzing SAE features from role-prompted LLM responses"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "sae-lens>=6.33.0",
     "transformer-lens>=3.0.0b0",
