@@ -16,10 +16,19 @@ def _gather_acts_hook(module, input, output, cache, key):
     cache[key] = hidden_states.detach()
 
 
+def _get_decoder_layer(model, layer_idx):
+    """Resolve the decoder layer module for different model architectures."""
+    inner = model.model
+    # Gemma 3 nests layers under language_model
+    if hasattr(inner, "language_model"):
+        return inner.language_model.layers[layer_idx]
+    return inner.layers[layer_idx]
+
+
 def _gather_residual_activations(model, target_layer, inputs):
     """Run forward pass and capture residual stream at target_layer via hook."""
     cache = {}
-    handle = model.model.layers[target_layer].register_forward_hook(
+    handle = _get_decoder_layer(model, target_layer).register_forward_hook(
         partial(_gather_acts_hook, cache=cache, key="resid_post")
     )
     try:
