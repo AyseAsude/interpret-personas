@@ -28,7 +28,7 @@ def load_sae_model(
     logger.info(f"Loading {model_name}...")
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
-        torch_dtype=torch.bfloat16,
+        dtype=torch.bfloat16,
         device_map="auto",
     )
 

@@ -94,7 +94,7 @@ class FeatureExtractor:
         activations = _gather_residual_activations(self.model, self._target_layer, tokens)
         sae_features = self.sae.encode(activations.to(self.sae.dtype).to(self.sae.device))
 
-        features = sae_features.squeeze(0).cpu().numpy()
+        features = sae_features.squeeze(0).detach().cpu().numpy()
 
         if token_selection == "response_only":
             response_start_idx = self._find_response_start(conversation)
