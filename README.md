@@ -51,8 +51,6 @@ For each role (276):
       → Generate one response
 ```
 
-**Why general questions?** Using the same questions across all roles means differences in features can be attributed to the persona, not the question.
-
 Responses are generated in batch using [vLLM](https://github.com/vllm-project/vllm) and saved as one JSONL file per role.
 
 **Output:** `outputs/responses/{question_mode}/{model_name}/{role}.jsonl`
@@ -82,7 +80,7 @@ Each line contains the system prompt, question, response text, and the full conv
 2. At layer 40, the SAE intercepts the residual stream activations.
 3. The SAE decomposes these activations into 65,536 sparse features, producing one feature vector per token.
 
-**Token selection:** By default, only tokens from the assistant's response are kept (`response_only` mode). The system prompt and question tokens are discarded &mdash; we want features that reflect *how the model responds*, not the prompt itself.
+**Token selection:** By default, only tokens from the assistant's response are kept (`response_only` mode).
 
 **Per-response aggregation:** The per-token feature vectors are reduced to a single vector per response using both mean and max pooling across tokens.
 
@@ -192,9 +190,16 @@ git clone https://github.com/AyseAsude/interpret-personas.git
 cd interpret-personas
 
 ### Install with uv
+
+```bash
+# Extraction and aggregation only (no vLLM)
 uv pip install -e .
 
-``` 
+# Full pipeline including response generation
+uv pip install -e ".[generation]"
+```
+
+vLLM is only needed for Stage 1 (response generation). Stages 2 and 3 work without it.
 
 ## Usage
 
@@ -254,5 +259,4 @@ python pipeline/3_aggregate.py --config configs/aggregation.yaml
 ## Built On
 
 - [SAELens](https://github.com/jbloomAus/SAELens) &mdash; SAE loading and inference
-- [TransformerLens](https://github.com/TransformerLensOrg/TransformerLens) &mdash; mechanistic interpretability hooks
-- [vLLM](https://github.com/vllm-project/vllm) &mdash; batch inference
+- [vLLM](https://github.com/vllm-project/vllm) &mdash; batch inference (optional, generation stage only)
