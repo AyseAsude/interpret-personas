@@ -1,11 +1,33 @@
 """SAE feature extraction with token selection support."""
 
 import logging
+import re
+from functools import partial
 
 import numpy as np
 import torch
 
 logger = logging.getLogger(__name__)
+
+
+def _gather_acts_hook(module, input, output, cache, key):
+    """Store layer output activations in cache dict."""
+    hidden_states = output[0] if isinstance(output, tuple) else output
+    cache[key] = hidden_states.detach()
+
+
+def _gather_residual_activations(model, target_layer, inputs):
+    """Run forward pass and capture residual stream at target_layer via hook."""
+    cache = {}
+    handle = model.model.layers[target_layer].register_forward_hook(
+        partial(_gather_acts_hook, cache=cache, key="resid_post")
+    )
+    try:
+        with torch.no_grad():
+            model(inputs)
+    finally:
+        handle.remove()
+    return cache["resid_post"]
 
 
 class FeatureExtractor:
@@ -18,26 +40,19 @@ class FeatureExtractor:
     """
 
     def __init__(self, model, sae, tokenizer):
-        """
-        Initialize feature extractor.
-
-        Args:
-            model: HookedTransformer or SAETransformerBridge model
-            sae: SAE model
-            tokenizer: Model tokenizer
-        """
         self.model = model
         self.sae = sae
         self.tokenizer = tokenizer
         self.device = "cuda"
+        self._target_layer = self._parse_layer_index(sae.cfg.metadata.hook_name)
 
-        # Bridge resolves alias hook names (e.g. hook_resid_post -> hook_out) to
-        # canonical names, and cache keys use the canonical form. Resolve here so
-        # the cache lookup matches.
-        hook_name = sae.cfg.metadata.hook_name
-        if hasattr(model, "_resolve_hook_name"):
-            hook_name = model._resolve_hook_name(hook_name)
-        self._sae_acts_key = f"{hook_name}.hook_sae_acts_post"
+    @staticmethod
+    def _parse_layer_index(hook_name: str) -> int:
+        """Extract layer index from SAE hook name (e.g. 'blocks.40.hook_resid_post' -> 40)."""
+        match = re.search(r"(?:blocks|layers)\.(\d+)\.", hook_name)
+        if not match:
+            raise ValueError(f"Cannot parse layer index from hook name: {hook_name}")
+        return int(match.group(1))
 
     def extract_from_conversation(
         self,
@@ -48,13 +63,11 @@ class FeatureExtractor:
         Extract SAE features from a conversation, aggregated across tokens.
 
         Args:
-            conversation: List of message dicts (e.g., [{"role": "user", "content": "..."}])
+            conversation: List of message dicts
             token_selection: "response_only" or "all"
 
         Returns:
-            Dict with aggregated feature vectors:
-                "mean": mean-pooled vector of shape (n_features,)
-                "max": max-pooled vector of shape (n_features,)
+            Dict with "mean" and "max" aggregated feature vectors of shape (n_features,)
         """
         if token_selection not in ["response_only", "all"]:
             raise ValueError(f"token_selection must be 'response_only' or 'all', got {token_selection}")
@@ -69,14 +82,8 @@ class FeatureExtractor:
         if tokens.dim() == 1:
             tokens = tokens.unsqueeze(0)
 
-        # Run forward pass with SAE attached at its hook point
-        with torch.no_grad():
-            _, cache = self.model.run_with_cache_with_saes(
-                tokens, saes=[self.sae], use_error_term=True
-            )
-
-        # Get SAE feature activations from cache
-        sae_features = cache[self._sae_acts_key]  # Shape: (batch=1, seq_len, n_features)
+        activations = _gather_residual_activations(self.model, self._target_layer, tokens)
+        sae_features = self.sae.encode(activations.to(self.sae.dtype).to(self.sae.device))
 
         features = sae_features.squeeze(0).cpu().numpy()
 
@@ -96,19 +103,7 @@ class FeatureExtractor:
         self,
         conversation: list[dict[str, str]],
     ) -> int:
-        """
-        Find the token index where the assistant response starts.
-
-        Strategy: Apply chat template to conversation without assistant response,
-        tokenize, and return the length as the response start index.
-
-        Args:
-            conversation: Full conversation including assistant response
-
-        Returns:
-            Index where response starts, or None if not found
-        """
-        # Remove the last assistant message to get the prompt up to the response
+        """Find the token index where the assistant response starts."""
         if conversation[-1]["role"] != "assistant":
             logger.warning("No assistant message at end of conversation")
             return None
@@ -125,10 +120,7 @@ class FeatureExtractor:
         if prompt_tokens.dim() == 1:
             prompt_tokens = prompt_tokens.unsqueeze(0)
 
-        # The response starts at the end of the prompt tokens
-        response_start_idx = prompt_tokens.shape[1]
-
-        return response_start_idx
+        return prompt_tokens.shape[1]
 
     def extract_batch(
         self,
@@ -139,18 +131,9 @@ class FeatureExtractor:
         Extract features from a batch of conversations.
 
         Note: Processes one at a time (no batching) to handle variable-length responses.
-
-        Args:
-            conversations: List of conversations
-            token_selection: "response_only" or "all"
-
-        Returns:
-            List of dicts, each with "mean" and "max" aggregated vectors
         """
         features_list = []
-
         for conversation in conversations:
             features = self.extract_from_conversation(conversation, token_selection)
             features_list.append(features)
-
         return features_list

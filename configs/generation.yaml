@@ -1,7 +1,7 @@
 # Generation Configuration
 # Configuration for response generation using vLLM
 
-model_name: "google/gemma-2-27b-it"
+model_name: "google/gemma-3-27b-it"
 
 # Question mode: "general" or "role_specific"
 # - "general": All roles use general questions from extraction_questions.jsonl
