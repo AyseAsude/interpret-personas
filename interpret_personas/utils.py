@@ -67,12 +67,13 @@ def get_model_short_name(model_name: str) -> str:
     return model_name.split("/")[-1].split("-")[0].capitalize()
 
 
-def get_completed_roles(output_dir: Path) -> set[str]:
+def get_completed_roles(output_dir: Path, extension: str) -> set[str]:
     """
     Return set of role names with existing output files.
 
     Args:
         output_dir: Directory containing output files
+        extension: File extension to look for (without dot), default "npz"
 
     Returns:
         Set of role names (without extension)
@@ -80,4 +81,4 @@ def get_completed_roles(output_dir: Path) -> set[str]:
     if not output_dir.exists():
         return set()
 
-    return {f.stem for f in output_dir.glob("*.npz")}
+    return {f.stem for f in output_dir.glob(f"*.{extension}")}

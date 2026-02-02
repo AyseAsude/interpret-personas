@@ -71,7 +71,7 @@ def main():
     )
 
     # Get completed roles (for resumption)
-    completed = get_completed_roles(config.output_dir) if args.skip_existing else set()
+    completed = get_completed_roles(config.output_dir, extension="npz") if args.skip_existing else set()
     if completed:
         logger.info(f"Skipping {len(completed)} existing roles")
 

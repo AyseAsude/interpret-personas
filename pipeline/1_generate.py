@@ -66,7 +66,7 @@ def main():
     logger.info(f"Loaded {len(general_questions)} general questions")
 
     # Get completed roles (for resumption)
-    completed = get_completed_roles(output_dir) if args.skip_existing else set()
+    completed = get_completed_roles(output_dir, extension="jsonl") if args.skip_existing else set()
     if completed:
         logger.info(f"Skipping {len(completed)} existing roles")
 
