@@ -3,14 +3,13 @@
 
 This script extracts SAE features from generated responses using a specified SAE model.
 Features are aggregated per-response (mean and max across tokens) and saved as compressed
-.npz files. Metadata is saved separately as JSONL (no feature data in JSONL).
+.npz files. Metadata lives in the stage 1 response JSONL files (row indices match).
 
 Usage:
     python pipeline/2_extract_features.py --config configs/extraction.yaml [--skip-existing]
 
 Output:
     outputs/features/{model_name}_{sae_id}/{role_name}.npz   (binary features)
-    outputs/features/{model_name}_{sae_id}/{role_name}.jsonl  (metadata only)
 """
 
 import argparse
@@ -108,7 +107,6 @@ def main():
 
         mean_list = []
         max_list = []
-        metadata_records = []
 
         for i, resp in enumerate(responses):
 
@@ -120,20 +118,6 @@ def main():
             mean_list.append(aggregated["mean"])
             max_list.append(aggregated["max"])
 
-            metadata_records.append({
-                "role_name": role_name,
-                "system_prompt": resp["system_prompt"],
-                "question_id": resp["question_id"],
-                "question": resp["question"],
-                "response_text": resp["response"],
-                "metadata": {
-                    "model_name": config.model_name,
-                    "sae_release": config.sae_release,
-                    "sae_id": config.sae_id,
-                    "token_selection": config.token_selection,
-                },
-            })
-
             if (i + 1) % 100 == 0:
                 logger.info(f"  Processed {i + 1}/{len(responses)} responses")
 
@@ -144,11 +128,7 @@ def main():
             max_features=np.array(max_list),      # [n_responses, sae_dim]
         )
 
-        metadata_file = config.output_dir / f"{role_name}.jsonl"
-        with jsonlines.open(metadata_file, "w") as writer:
-            writer.write_all(metadata_records)
-
-        logger.info(f"Saved {len(metadata_records)} responses to {npz_file} + {metadata_file}")
+        logger.info(f"Saved {len(responses)} responses to {npz_file}")
         processed_roles += 1
 
     logger.info(f"Processed {processed_roles}/{total_roles} roles")

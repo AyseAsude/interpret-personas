@@ -71,8 +71,6 @@ def get_completed_roles(output_dir: Path) -> set[str]:
     """
     Return set of role names with existing output files.
 
-    Looks for .npz files (binary feature arrays) and .jsonl files.
-
     Args:
         output_dir: Directory containing output files
 
@@ -82,4 +80,4 @@ def get_completed_roles(output_dir: Path) -> set[str]:
     if not output_dir.exists():
         return set()
 
-    return {f.stem for f in output_dir.glob("*.npz")} | {f.stem for f in output_dir.glob("*.jsonl")}
+    return {f.stem for f in output_dir.glob("*.npz")}
