@@ -158,8 +158,26 @@ a {
 }
 
 .tooltip-desc {
-  margin: 6px 0 0;
-  color: var(--muted);
+  margin: 8px 0 0;
+  padding: 7px 8px 8px;
+  border-radius: 8px;
+  border: 1px solid #c9dbc0;
+  background: linear-gradient(135deg, #ecf6e6 0%, #fff7e6 100%);
+  color: #153126;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.tooltip-desc::before {
+  content: "Description";
+  display: block;
+  margin-bottom: 4px;
+  color: var(--accent);
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .side-panel {
@@ -169,19 +187,6 @@ a {
   min-height: 0;
   display: grid;
   grid-template-rows: auto auto 1fr;
-}
-
-.side-panel.collapsed {
-  width: 56px;
-}
-
-.collapse-btn {
-  border: 0;
-  border-bottom: 1px solid var(--line);
-  background: #e9efe4;
-  height: 38px;
-  font-family: "IBM Plex Mono", monospace;
-  cursor: pointer;
 }
 
 .tab-row {
@@ -295,19 +300,6 @@ a {
   margin: 0;
   text-align: right;
   font-family: "IBM Plex Mono", monospace;
-}
-
-.panel-actions {
-  margin-top: 10px;
-}
-
-.panel-actions button {
-  border: 1px solid #9ec9b6;
-  background: #f2fffb;
-  color: #0c5f47;
-  border-radius: 8px;
-  padding: 7px 10px;
-  cursor: pointer;
 }
 
 .neighbor-list {

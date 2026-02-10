@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import json
+import logging
 from pathlib import Path
 
 import numpy as np
@@ -13,6 +14,8 @@ from sklearn.neighbors import NearestNeighbors
 
 from interpret_personas.config import VisualizationConfig
 from interpret_personas.utils import ensure_dir
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def _safe_float(value: float | np.floating, digits: int = 6) -> float:
@@ -27,6 +30,21 @@ def _load_description_cache(cache_path: Path | None) -> dict[int, dict[str, str 
     if cache_path is None:
         return {}
 
+    def _coerce_feature_id(raw: object) -> int | None:
+        try:
+            feat_id = int(raw)
+        except (TypeError, ValueError):
+            return None
+        if feat_id < 0:
+            return None
+        return feat_id
+
+    def _coerce_text(raw: object) -> str | None:
+        if not isinstance(raw, str):
+            return None
+        value = raw.strip()
+        return value if value else None
+
     with open(cache_path, "r") as f:
         payload = json.load(f)
 
@@ -36,24 +54,34 @@ def _load_description_cache(cache_path: Path | None) -> dict[int, dict[str, str 
         for item in payload:
             if not isinstance(item, dict) or "feature_id" not in item:
                 continue
-            feat_id = int(item["feature_id"])
+            feat_id = _coerce_feature_id(item["feature_id"])
+            if feat_id is None:
+                continue
             descriptions[feat_id] = {
-                "description": item.get("description"),
-                "url": item.get("url"),
+                "description": _coerce_text(item.get("description")),
+                "url": _coerce_text(item.get("url")),
             }
     elif isinstance(payload, dict):
         for key, value in payload.items():
-            feat_id = int(key)
+            feat_id = _coerce_feature_id(key)
+            if feat_id is None:
+                continue
             if isinstance(value, dict):
                 descriptions[feat_id] = {
-                    "description": value.get("description"),
-                    "url": value.get("url"),
+                    "description": _coerce_text(value.get("description")),
+                    "url": _coerce_text(value.get("url")),
                 }
             elif isinstance(value, str):
                 descriptions[feat_id] = {
-                    "description": value,
+                    "description": _coerce_text(value),
                     "url": None,
                 }
+    else:
+        _LOGGER.warning(
+            "Description cache payload at %s must be a list or dict, got %s",
+            cache_path,
+            type(payload).__name__,
+        )
 
     return descriptions
 

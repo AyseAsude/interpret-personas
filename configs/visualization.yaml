@@ -24,4 +24,4 @@ quality_k: 15
 # Optional local JSON cache:
 # - dict keyed by feature id: {"12345": {"description": "...", "url": "..."}}
 # - or list of {"feature_id": 12345, "description": "...", "url": "..."}
-# description_cache: "data/neuronpedia_cache.json"
+description_cache: "data/neuronpedia_cache.json"

@@ -30,7 +30,6 @@ export default function App() {
   const [layoutMode, setLayoutMode] = useState<LayoutMode>("umap");
   const [colorMode, setColorMode] = useState<ColorMode>("preferred_role");
   const [activeTab, setActiveTab] = useState<PanelTab>("feature");
-  const [panelCollapsed, setPanelCollapsed] = useState<boolean>(false);
   const [selectedFeatureRow, setSelectedFeatureRow] = useState<number | null>(null);
   const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
   const [roleFocus, setRoleFocus] = useState<string>("");
@@ -341,6 +340,10 @@ export default function App() {
     );
   }
 
+  // Keep CSV exporters available for non-UI triggers.
+  void exportRoleTopFeatures;
+  void exportFeatureNeighbors;
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -414,33 +417,27 @@ export default function App() {
           )}
         </section>
 
-        <aside className={`side-panel ${panelCollapsed ? "collapsed" : ""}`}>
-          <button className="collapse-btn" onClick={() => setPanelCollapsed((prev) => !prev)}>
-            {panelCollapsed ? "Open" : "Close"}
-          </button>
-
-          {!panelCollapsed && (
-            <>
-              <nav className="tab-row">
-                <button
-                  className={activeTab === "feature" ? "active" : ""}
-                  onClick={() => setActiveTab("feature")}
-                >
-                  Feature
-                </button>
-                <button
-                  className={activeTab === "role" ? "active" : ""}
-                  onClick={() => setActiveTab("role")}
-                >
-                  Role
-                </button>
-                <button
-                  className={activeTab === "settings" ? "active" : ""}
-                  onClick={() => setActiveTab("settings")}
-                >
-                  Settings
-                </button>
-              </nav>
+        <aside className="side-panel">
+          <nav className="tab-row">
+            <button
+              className={activeTab === "feature" ? "active" : ""}
+              onClick={() => setActiveTab("feature")}
+            >
+              Feature
+            </button>
+            <button
+              className={activeTab === "role" ? "active" : ""}
+              onClick={() => setActiveTab("role")}
+            >
+              Role
+            </button>
+            <button
+              className={activeTab === "settings" ? "active" : ""}
+              onClick={() => setActiveTab("settings")}
+            >
+              Settings
+            </button>
+          </nav>
 
               {activeTab === "feature" && (
                 <div className="panel-content">
@@ -494,10 +491,6 @@ export default function App() {
                         <dd>{selectedFeature.metrics.mean_activation.toFixed(3)}</dd>
                       </dl>
 
-                      <div className="panel-actions">
-                        <button onClick={exportFeatureNeighbors}>Export neighbors CSV</button>
-                      </div>
-
                       <h3>Related Features (high-D cosine)</h3>
                       <ul className="neighbor-list">
                         {relatedFeatures.map((entry) => (
@@ -544,10 +537,6 @@ export default function App() {
                   <p>
                     Preferred features: <strong>{roleStats.preferredCount}</strong>
                   </p>
-
-                  <div className="panel-actions">
-                    <button onClick={exportRoleTopFeatures}>Export top features CSV</button>
-                  </div>
 
                   <h3>Nearest roles (high-D cosine)</h3>
                   <ul className="plain-list">
@@ -608,8 +597,6 @@ export default function App() {
                   </div>
                 </div>
               )}
-            </>
-          )}
         </aside>
       </main>
     </div>
