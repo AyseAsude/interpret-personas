@@ -244,6 +244,32 @@ This creates:
 The bundle includes selected feature metadata, UMAP/PCA coordinates, high-D cosine neighbors,
 role-role similarity, and a neighborhood preservation score.
 
+### 4.5. Fetch Neuronpedia descriptions (optional, cached)
+
+This step fetches descriptions for selected features from:
+
+`https://neuronpedia.org/api/feature/{neuronpedia_id}/{feature_id}`
+
+Example (Gemma 3 27B layer-40 Gemmascope release):
+
+```bash
+python pipeline/5_fetch_neuronpedia_cache.py \
+  --bundle-file outputs/viz_bundle/general_gemma3_layer40_mean_top5000/bundle.json \
+  --neuronpedia-id gemma-3-27b-it/40-gemmascope-2-res-65k \
+  --output-cache data/neuronpedia_cache.json
+```
+
+Then point visualization config to that cache and rebuild bundle:
+
+```yaml
+# configs/visualization.yaml
+description_cache: "data/neuronpedia_cache.json"
+```
+
+```bash
+python pipeline/4_build_viz_bundle.py --config configs/visualization.yaml
+```
+
 ### 5. Run the interactive explorer
 
 The frontend lives in:
