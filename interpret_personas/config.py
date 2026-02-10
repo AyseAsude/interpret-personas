@@ -154,3 +154,77 @@ class AggregationConfig:
             raise ValueError(f"Features path is not a directory: {self.features_dir}")
 
         self.output_dir.mkdir(parents=True, exist_ok=True)
+
+
+@dataclass
+class VisualizationConfig:
+    """Configuration for visualization bundle build stage."""
+
+    aggregated_file: Path
+    features_dir: Path
+    output_dir: Path
+    strategy: str = "mean"
+    top_k: int = 5000
+    random_seed: int = 42
+    split_seed: int = 42
+    umap_n_neighbors: int = 15
+    umap_min_dist: float = 0.1
+    umap_random_state: int = 24
+    neighbor_k: int = 20
+    quality_k: int = 15
+    description_cache: Path | None = None
+    dataset_name: str = "default"
+
+    @classmethod
+    def from_yaml(cls, path: Path) -> "VisualizationConfig":
+        """Load configuration from YAML file."""
+        with open(path, "r") as f:
+            data = yaml.safe_load(f)
+
+        data["aggregated_file"] = Path(data["aggregated_file"])
+        data["features_dir"] = Path(data["features_dir"])
+        data["output_dir"] = Path(data["output_dir"])
+
+        if data.get("description_cache"):
+            data["description_cache"] = Path(data["description_cache"])
+
+        return cls(**data)
+
+    def validate(self):
+        """Validate configuration parameters."""
+        if not self.aggregated_file.exists():
+            raise ValueError(f"Aggregated file does not exist: {self.aggregated_file}")
+        if not self.aggregated_file.is_file():
+            raise ValueError(f"Aggregated path is not a file: {self.aggregated_file}")
+
+        if not self.features_dir.exists():
+            raise ValueError(f"Features directory does not exist: {self.features_dir}")
+        if not self.features_dir.is_dir():
+            raise ValueError(f"Features path is not a directory: {self.features_dir}")
+
+        if self.strategy not in ["mean", "max"]:
+            raise ValueError(f"strategy must be 'mean' or 'max': {self.strategy}")
+
+        if self.top_k <= 0:
+            raise ValueError(f"top_k must be positive: {self.top_k}")
+        if self.umap_n_neighbors <= 1:
+            raise ValueError(
+                f"umap_n_neighbors must be > 1: {self.umap_n_neighbors}"
+            )
+        if not 0 <= self.umap_min_dist <= 1:
+            raise ValueError(f"umap_min_dist must be in [0, 1]: {self.umap_min_dist}")
+        if self.neighbor_k <= 0:
+            raise ValueError(f"neighbor_k must be positive: {self.neighbor_k}")
+        if self.quality_k <= 0:
+            raise ValueError(f"quality_k must be positive: {self.quality_k}")
+
+        if self.description_cache and not self.description_cache.exists():
+            raise ValueError(
+                f"description_cache does not exist: {self.description_cache}"
+            )
+        if self.description_cache and not self.description_cache.is_file():
+            raise ValueError(
+                f"description_cache path is not a file: {self.description_cache}"
+            )
+
+        self.output_dir.mkdir(parents=True, exist_ok=True)

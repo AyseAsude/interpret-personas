@@ -197,6 +197,9 @@ uv pip install -e .
 
 # Full pipeline including response generation
 uv pip install -e ".[generation]"
+
+# Visualization bundle build dependencies (UMAP + plotting stack)
+uv pip install -e ".[visualization]"
 ```
 
 vLLM is only needed for Stage 1 (response generation). Stages 2 and 3 work without it.
@@ -225,6 +228,32 @@ Supports `--skip-existing` and `--roles` (same as stage 1).
 
 ```bash
 python pipeline/3_aggregate.py --config configs/aggregation.yaml
+```
+
+### 4. Build visualization bundle
+
+```bash
+python pipeline/4_build_viz_bundle.py --config configs/visualization.yaml
+```
+
+This creates:
+
+- `outputs/viz_bundle/{dataset_name}/bundle.json` (frontend data bundle)
+- `outputs/viz_bundle/{dataset_name}/features.csv` (flat feature table for export workflows)
+
+The bundle includes selected feature metadata, UMAP/PCA coordinates, high-D cosine neighbors,
+role-role similarity, and a neighborhood preservation score.
+
+### 5. Run the interactive explorer
+
+The frontend lives in:
+
+`apps/sae-persona-explorer`
+
+Serve `bundle.json` to the app root (or set `VITE_BUNDLE_URL` to a custom path), then run:
+
+```bash
+npm run dev
 ```
 
 ## Configuration
