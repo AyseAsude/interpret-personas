@@ -95,34 +95,25 @@ export function fitOrthographicView(
   };
 }
 
-export function saveCsv(
-  fileName: string,
-  headers: string[],
-  rows: Array<Array<string | number>>,
-): void {
-  const csvLines = [headers.join(",")];
-  for (const row of rows) {
-    const escaped = row.map((value) => {
-      const str = String(value ?? "");
-      const needsQuotes = str.includes(",") || str.includes('"') || str.includes("\n");
-      if (!needsQuotes) {
-        return str;
-      }
-      return `"${str.replace(/"/g, '""')}"`;
-    });
-    csvLines.push(escaped.join(","));
+export function sanitizeExternalUrl(rawUrl: string | null | undefined): string | null {
+  if (!rawUrl) {
+    return null;
   }
-  const blob = new Blob([csvLines.join("\n")], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
 
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = fileName;
-  anchor.click();
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return null;
+  }
 
-  URL.revokeObjectURL(url);
-}
+  if (parsed.protocol !== "https:") {
+    return null;
+  }
 
-export function clamp01(value: number): number {
-  return Math.max(0, Math.min(1, value));
+  if (parsed.hostname !== "neuronpedia.org") {
+    return null;
+  }
+
+  return parsed.toString();
 }

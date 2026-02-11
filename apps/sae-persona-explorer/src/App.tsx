@@ -2,13 +2,13 @@ import type { ChangeEvent } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import DeckGL from "@deck.gl/react";
 import { OrthographicView } from "@deck.gl/core";
-import { ScatterplotLayer } from "@deck.gl/layers";
+import { LineLayer, ScatterplotLayer } from "@deck.gl/layers";
 
 import type { BundlePayload, ColorMode, FeaturePoint, LayoutMode } from "./types";
 import {
   colorForFeature,
   fitOrthographicView,
-  saveCsv,
+  sanitizeExternalUrl,
   type OrthoViewState,
 } from "./utils";
 
@@ -18,9 +18,21 @@ type HoverInfo = {
   point: FeaturePoint;
 };
 
+type AxisSegment = {
+  source: [number, number];
+  target: [number, number];
+  color: [number, number, number, number];
+  width: number;
+};
+
+type OriginPoint = {
+  x: number;
+  y: number;
+};
+
 type PanelTab = "feature" | "role" | "settings";
 
-const BUNDLE_URL = import.meta.env.VITE_BUNDLE_URL ?? "/bundle.json";
+const BUNDLE_URL = import.meta.env.VITE_BUNDLE_URL ?? `${import.meta.env.BASE_URL}bundle.json`;
 
 export default function App() {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
@@ -111,8 +123,11 @@ export default function App() {
       return;
     }
     const coords: [number, number][] = points.map((point) => [point.x, point.y]);
+    if (layoutMode === "pca") {
+      coords.push([0, 0]);
+    }
     setViewState(fitOrthographicView(coords, mapSize.width, mapSize.height));
-  }, [points, mapSize.width, mapSize.height]);
+  }, [points, mapSize.width, mapSize.height, layoutMode]);
 
   const selectedFeature = useMemo(() => {
     if (!bundle || selectedFeatureRow === null) {
@@ -120,6 +135,11 @@ export default function App() {
     }
     return bundle.features[selectedFeatureRow] ?? null;
   }, [bundle, selectedFeatureRow]);
+
+  const selectedFeatureNeuronpediaUrl = useMemo(
+    () => sanitizeExternalUrl(selectedFeature?.neuronpedia_url),
+    [selectedFeature?.neuronpedia_url],
+  );
 
   const roleStats = useMemo(() => {
     if (!bundle || !roleFocus) {
@@ -172,6 +192,72 @@ export default function App() {
       selectedNeighborRows.filter((row) => row >= 0),
     );
 
+    let axisLayers: Array<LineLayer<AxisSegment> | ScatterplotLayer<OriginPoint>> = [];
+    if (layoutMode === "pca" && points.length) {
+      let minX = Number.POSITIVE_INFINITY;
+      let minY = Number.POSITIVE_INFINITY;
+      let maxX = Number.NEGATIVE_INFINITY;
+      let maxY = Number.NEGATIVE_INFINITY;
+      for (const point of points) {
+        minX = Math.min(minX, point.x);
+        minY = Math.min(minY, point.y);
+        maxX = Math.max(maxX, point.x);
+        maxY = Math.max(maxY, point.y);
+      }
+
+      minX = Math.min(minX, 0);
+      minY = Math.min(minY, 0);
+      maxX = Math.max(maxX, 0);
+      maxY = Math.max(maxY, 0);
+
+      const spanX = Math.max(maxX - minX, 1e-6);
+      const spanY = Math.max(maxY - minY, 1e-6);
+      const padX = spanX * 0.08;
+      const padY = spanY * 0.08;
+
+      const axisData: AxisSegment[] = [
+        {
+          source: [minX - padX, 0],
+          target: [maxX + padX, 0],
+          color: [11, 110, 79, 160],
+          width: 1.8,
+        },
+        {
+          source: [0, minY - padY],
+          target: [0, maxY + padY],
+          color: [157, 43, 37, 150],
+          width: 1.4,
+        },
+      ];
+
+      const axisLayer = new LineLayer<AxisSegment>({
+        id: "pca-axes",
+        data: axisData,
+        pickable: false,
+        getSourcePosition: (d) => d.source,
+        getTargetPosition: (d) => d.target,
+        getColor: (d) => d.color,
+        widthUnits: "pixels",
+        getWidth: (d) => d.width,
+      });
+
+      const originLayer = new ScatterplotLayer<OriginPoint>({
+        id: "pca-origin",
+        data: [{ x: 0, y: 0 }],
+        pickable: false,
+        radiusUnits: "pixels",
+        getPosition: (d) => [d.x, d.y],
+        getRadius: 5.6,
+        getFillColor: [18, 40, 29, 230],
+        stroked: true,
+        getLineColor: [250, 250, 245, 245],
+        lineWidthUnits: "pixels",
+        getLineWidth: 1.4,
+      });
+
+      axisLayers = [axisLayer, originLayer];
+    }
+
     const baseLayer = new ScatterplotLayer<FeaturePoint>({
       id: "feature-points",
       data: points,
@@ -219,12 +305,12 @@ export default function App() {
     });
 
     if (selectedFeatureRow === null) {
-      return [baseLayer];
+      return [...axisLayers, baseLayer];
     }
 
     const selectedPoint = points.find((point) => point.feature_row === selectedFeatureRow);
     if (!selectedPoint) {
-      return [baseLayer];
+      return [...axisLayers, baseLayer];
     }
 
     const [selectedR, selectedG, selectedB] = colorForFeature(selectedPoint, colorMode);
@@ -264,8 +350,8 @@ export default function App() {
       getFillColor: [selectedR, selectedG, selectedB, 102],
     });
 
-    return [neighborHueLayer, selectedHueLayer, baseLayer];
-  }, [bundle, points, colorMode, highlightRole, selectedFeatureRow]);
+    return [...axisLayers, neighborHueLayer, selectedHueLayer, baseLayer];
+  }, [bundle, points, colorMode, highlightRole, selectedFeatureRow, layoutMode]);
 
   function handleBundleFileUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -287,62 +373,6 @@ export default function App() {
     };
     reader.readAsText(file);
   }
-
-  function exportRoleTopFeatures() {
-    if (!bundle || !roleFocus) {
-      return;
-    }
-    const rows = roleStats.topFeatures.map((feature) => [
-      feature.feature_id,
-      feature.preferred_role,
-      feature.metrics.score,
-      feature.metrics.stability,
-      feature.metrics.pref_ratio,
-      feature.description ?? "",
-      feature.neuronpedia_url ?? "",
-    ]);
-    saveCsv(
-      `${roleFocus}_top_features.csv`,
-      [
-        "feature_id",
-        "preferred_role",
-        "score",
-        "stability",
-        "pref_ratio",
-        "description",
-        "neuronpedia_url",
-      ],
-      rows,
-    );
-  }
-
-  function exportFeatureNeighbors() {
-    if (!selectedFeature) {
-      return;
-    }
-    const rows = relatedFeatures.map((entry) => [
-      selectedFeature.feature_id,
-      entry.feature.feature_id,
-      entry.sim,
-      entry.feature.preferred_role,
-      entry.feature.description ?? "",
-    ]);
-    saveCsv(
-      `feature_${selectedFeature.feature_id}_neighbors.csv`,
-      [
-        "source_feature_id",
-        "neighbor_feature_id",
-        "cosine_similarity",
-        "preferred_role",
-        "description",
-      ],
-      rows,
-    );
-  }
-
-  // Keep CSV exporters available for non-UI triggers.
-  void exportRoleTopFeatures;
-  void exportFeatureNeighbors;
 
   return (
     <div className="app-shell">
@@ -383,9 +413,10 @@ export default function App() {
                 viewState={viewState}
                 onViewStateChange={({ viewState: nextViewState }) => {
                   const target = (nextViewState.target ?? [0, 0, 0]) as [number, number, number];
+                  const zoom = typeof nextViewState.zoom === "number" ? nextViewState.zoom : 0;
                   setViewState({
                     target,
-                    zoom: nextViewState.zoom ?? 0,
+                    zoom,
                   });
                 }}
                 layers={layers}
@@ -394,6 +425,7 @@ export default function App() {
                 <span>{bundle.features.length.toLocaleString()} selected features</span>
                 <span>{bundle.roles.length} roles</span>
                 <span>kNN overlap@{bundle.guardrails.knn_overlap_at_k}: {bundle.guardrails.knn_overlap_score.toFixed(3)}</span>
+                {layoutMode === "pca" && <span>PCA axes shown: PC1 horizontal, origin at (0, 0)</span>}
               </div>
             </>
           )}
@@ -451,9 +483,13 @@ export default function App() {
                         {selectedFeature.description ??
                           "No cached description is available for this feature."}
                       </p>
-                      {selectedFeature.neuronpedia_url && (
+                      {selectedFeatureNeuronpediaUrl && (
                         <p>
-                          <a href={selectedFeature.neuronpedia_url} target="_blank" rel="noreferrer">
+                          <a
+                            href={selectedFeatureNeuronpediaUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
                             Open Neuronpedia entry
                           </a>
                         </p>
