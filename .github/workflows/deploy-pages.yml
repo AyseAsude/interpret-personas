@@ -3,7 +3,7 @@ name: Deploy SAE Persona Explorer to GitHub Pages
 on:
   push:
     branches:
-      - main
+      - master
     paths:
       - "apps/sae-persona-explorer/**"
       - ".github/workflows/deploy-pages.yml"
