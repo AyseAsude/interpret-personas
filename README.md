@@ -2,8 +2,6 @@
 
 Map which SAE (Sparse Autoencoder) features activate under which personas. Given 276 roles, this pipeline generates role-prompted LLM responses, extracts interpretable SAE features from those responses, and aggregates them into per-role feature vectors.
 
-> **Status:** Work in progress. The three-stage pipeline is implemented; analysis of the resulting feature maps is not yet included.
-
 ## How It Works
 
 The pipeline has three stages that run sequentially:
@@ -24,15 +22,13 @@ The final output is a matrix of shape `[276 roles, 65536 SAE features]` where ea
 
 ---
 
-## Step-by-Step Explanation
-
-### Stage 1: Generate Responses
+## Stage 1: Generate Responses
 
 **Goal:** Get the model to respond to questions while role-playing each persona.
 
 **What happens:**
 
-Each of the 276 roles (e.g., "analyst", "philosopher", "doctor") has 5 different instruction variants &mdash; different ways of phrasing the same role assignment. This reduces the chance that results depend on one specific wording.
+Each of the 276 roles (e.g., "analyst", "philosopher", "doctor") has 5 different instruction variants &mdash; different ways of phrasing the same role assignment.
 
 ```
 Role: analyst
@@ -93,7 +89,7 @@ Token features:  [n_tokens, 65536]
   [1, 65536]                      [1, 65536]
 ```
 
-Both are saved so you can choose the aggregation that suits your analysis.
+Both are saved.
 
 **Output per role:**
 - `{role}.npz` &mdash; compressed numpy arrays (`mean_features`, `max_features`), shape `[n_responses, 65536]`
@@ -104,8 +100,6 @@ Both are saved so you can choose the aggregation that suits your analysis.
 ### Stage 3: Aggregate to Role Level
 
 **Goal:** Collapse all responses for a role into a single feature vector that represents that persona.
-
-**What happens:**
 
 Each role has up to 1,200 responses (5 instruction variants &times; 240 questions). This stage aggregates them down to one vector per role.
 
@@ -141,9 +135,8 @@ Role definitions and questions are taken from [assistant-axis](https://github.co
 
 - **5 instruction variants** &mdash; different phrasings of the role assignment (used as system prompts)
 - **Role-specific questions** &mdash; questions tailored to the role (not used in the default `general` question mode)
-- **Eval prompt** &mdash; a prompt template for evaluating how well the model adopted the role
 
-Roles span a wide range: analyst, doctor, philosopher, activist, accountant, absurdist, and many more.
+Roles span a wide range: analyst, doctor, philosopher, activist, accountant, absurdist, and more.
 
 ### Questions
 
@@ -202,8 +195,6 @@ uv pip install -e ".[generation]"
 uv pip install -e ".[visualization]"
 ```
 
-vLLM is only needed for Stage 1 (response generation). Stages 2 and 3 work without it.
-
 ## Usage
 
 Each stage is configured via a YAML file in `configs/`. Edit these to change models, paths, or parameters.
@@ -239,7 +230,7 @@ python pipeline/4_build_viz_bundle.py --config configs/visualization.yaml
 This creates:
 
 - `outputs/viz_bundle/{dataset_name}/bundle.json` (frontend data bundle)
-- `outputs/viz_bundle/{dataset_name}/features.csv` (flat feature table for export workflows)
+- `outputs/viz_bundle/{dataset_name}/features.csv` (flat feature table for exporting)
 
 The bundle includes selected feature metadata, UMAP/PCA coordinates, high-D cosine neighbors,
 role-role similarity, and a neighborhood preservation score.
