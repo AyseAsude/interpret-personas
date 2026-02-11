@@ -1,5 +1,15 @@
 # Interpret Personas
 
+<p align="center">
+  <a href="https://ayseasude.github.io/interpret-personas/">
+    <img alt="Live Demo" src="https://img.shields.io/badge/%20Live%20Demo-SAE%20Persona%20Explorer-2ea44f?style=for-the-badge" />
+  </a>
+</p>
+
+<p align="center">
+  <img src="demo.png" alt="SAE Persona Explorer screenshot" width="800" />
+</p>
+
 Map which SAE (Sparse Autoencoder) features activate under which personas. Given 276 roles, this pipeline generates role-prompted LLM responses, extracts interpretable SAE features from those responses, and aggregates them into per-role feature vectors.
 
 ## How It Works
