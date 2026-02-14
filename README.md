@@ -7,28 +7,46 @@
 </p>
 
 <p align="center">
-  <img src="demo.png" alt="SAE Persona Explorer screenshot" width="800" />
+  <img src="figures/demo.png" alt="SAE Persona Explorer" width="800" />
 </p>
 
-Map which SAE (Sparse Autoencoder) features activate under which personas. Given 276 roles, this pipeline generates role-prompted LLM responses, extracts interpretable SAE features from those responses, and aggregates them into per-role feature vectors.
+Maps which SAE (Sparse Autoencoder) features activate under which personas. Given a set of roles, this pipeline generates role-prompted LLM responses, extracts interpretable SAE features from those responses, and aggregates them into per-role feature vectors. The current dataset uses 50 roles selected from the 276 available in [assistant-axis](https://github.com/safety-research/assistant-axis/).
+
+The `notebooks/select_features.ipynb` notebook walks through the feature selection and visualization methodology interactively with plots.
+
+### Role Similarity Heatmap
+
+Roles that are semantically close tend to have high cosine similarity (e.g., mentor–teacher, programmer–engineer), while contrasting roles have lower similarity (e.g., assistant–ghost).
+<p align="center">
+  <img src="figures/role_similarity_heatmap.png" alt="Role-role similarity heatmap" width="800" />
+</p>
+
+### PCA Role Axes (Assistant Axis)
+
+**PC1**: The assistant role lies near one endpoint. Roles can be ordered along PC1 from assistant-like to role-play-heavy. Later PCs capture independent variation (style, domain, formality) where assistant sits near the middle with no special position. This is consistent with [Lu et al.](https://arxiv.org/pdf/2601.10387), who interpret PC1 as an axis of “similarity to default assistant behavior.” **Notably, both model activations and interpretable features support the same interpretation.**
+
+<p align="center">
+  <img src="figures/role_pca_axes.png" alt="Projection of role vectors to the PCA components" width="800" />
+</p>
+
 
 ## How It Works
 
 The pipeline has three stages that run sequentially:
 
 ```
-  ┌──────────────┐     ┌──────────────────┐     ┌──────────────┐
-  │  1. Generate │────▶│  2. Extract      │────▶│  3. Aggregate│
-  │  Responses   │     │  SAE Features    │     │  Per Role    │
-  └──────────────┘     └──────────────────┘     └──────────────┘
+  ┌──────────────┐     ┌──────────────────┐     ┌───────────────┐
+  │  1. Generate │────▶│  2. Extract      │────▶│  3. Aggregate │
+  │  Responses   │     │  SAE Features    │     │  Per Role     │
+  └──────────────┘     └──────────────────┘     └───────────────┘
 
-  276 roles             Run each response        Combine all responses
-  × 5 prompts           through the model         for a role into a
-  × 240 questions        with an SAE attached      single feature vector
-  = 331,200 responses    to extract features
+  50 roles               Run each response       Combine all responses
+  × 5 prompts            through the model       for a role into a
+  × 240 questions        with an SAE attached    single feature vector
+  = 60,000 responses     to extract features
 ```
 
-The final output is a matrix of shape `[276 roles, 65536 SAE features]` where each cell tells you how strongly a given feature activates for a given persona.
+The final output is a matrix of shape `[50 roles, 65536 SAE features]` where each cell tells you how strongly a given feature activates for a given persona.
 
 ---
 
@@ -36,9 +54,7 @@ The final output is a matrix of shape `[276 roles, 65536 SAE features]` where ea
 
 **Goal:** Get the model to respond to questions while role-playing each persona.
 
-**What happens:**
-
-Each of the 276 roles (e.g., "analyst", "philosopher", "doctor") has 5 different instruction variants &mdash; different ways of phrasing the same role assignment.
+Each role (e.g., "analyst", "philosopher", "doctor") has 5 different system prompts.
 
 ```
 Role: analyst
@@ -51,7 +67,7 @@ Role: analyst
 For each role, every instruction variant is paired with every question from a set of 240 general questions (covering ethics, technical topics, social scenarios, etc.). The model generates a response for each combination.
 
 ```
-For each role (276):
+For each role (50):
   For each instruction variant (5):
     For each question (240):
       → Generate one response
@@ -68,8 +84,6 @@ Each line contains the system prompt, question, response text, and the full conv
 ### Stage 2: Extract SAE Features
 
 **Goal:** Turn each response into a vector of interpretable feature activations.
-
-**What happens:**
 
 ```
                     ┌────────────────────────────────────┐
@@ -103,8 +117,6 @@ Both are saved.
 
 **Output per role:**
 - `{role}.npz` &mdash; compressed numpy arrays (`mean_features`, `max_features`), shape `[n_responses, 65536]`
-- `{role}.jsonl` &mdash; metadata (role, question, response text, etc.) without feature data
-
 ---
 
 ### Stage 3: Aggregate to Role Level
@@ -122,11 +134,11 @@ Per-response features:   [1200, 65536]   (one role)
         [1, 65536]                      [1, 65536]
 ```
 
-This is done for all 276 roles, producing the final output:
+This is done for all roles, producing the final output:
 
 ```
-Per-role features:   [276, 65536]
-Role names:          [276]
+Per-role features:   [50, 65536]
+Role names:          [50]
 ```
 
 **Output:** `outputs/aggregated/{strategy}/per_role.npz`
@@ -137,52 +149,18 @@ One file per aggregation strategy (mean, max), each containing a `features` arra
 
 ## Data
 
-Role definitions and questions are taken from [assistant-axis](https://github.com/safety-research/assistant-axis/) ([paper](https://arxiv.org/abs/2601.10387)).
+Role definitions and questions come from the [assistant-axis](https://github.com/safety-research/assistant-axis/) repository ([paper](https://arxiv.org/abs/2601.10387)) and are not included in this repo. Clone assistant-axis and place its data under `data/` to run the pipeline.
 
 ### Roles
 
-276 role files in `data/roles/instructions/`, each containing:
+The assistant-axis dataset provides 276 roles. This repo uses a subset of 50. Each role file (in `data/roles/instructions/`) contains:
 
 - **5 instruction variants** &mdash; different phrasings of the role assignment (used as system prompts)
 - **Role-specific questions** &mdash; questions tailored to the role (not used in the default `general` question mode)
 
-Roles span a wide range: analyst, doctor, philosopher, activist, accountant, absurdist, and more.
-
 ### Questions
 
-240 general questions in `data/extraction_questions.jsonl`, covering diverse topics:
-
-- Ethics and morality
-- Technical explanations
-- Social and interpersonal scenarios
-- Business and practical decisions
-
----
-
-## Output Structure
-
-```
-outputs/
-├── responses/
-│   └── general/
-│       └── gemma-3-27b-it/
-│           ├── analyst.jsonl          # 1,200 responses
-│           ├── philosopher.jsonl
-│           └── ...                    # 276 files
-├── features/
-│   └── general/
-│       └── gemma-3-27b-it_layer_40_width_65k_l0_medium/
-│           ├── analyst.npz            # feature arrays
-│           ├── analyst.jsonl          # metadata
-│           └── ...                    # 276 × 2 files
-└── aggregated/
-    └── general/
-        └── gemma-3-27b-it_layer_40_width_65k_l0_medium/
-            ├── mean/
-            │   └── per_role.npz       # [276, 65536]
-            └── max/
-                └── per_role.npz       # [276, 65536]
-```
+240 general questions (in `data/extraction_questions.jsonl`), covering diverse topics: ethics, technical explanations, social scenarios, and practical decisions.
 
 ---
 
@@ -242,8 +220,7 @@ This creates:
 - `outputs/viz_bundle/{dataset_name}/bundle.json` (frontend data bundle)
 - `outputs/viz_bundle/{dataset_name}/features.csv` (flat feature table for exporting)
 
-The bundle includes selected feature metadata, UMAP/PCA coordinates, high-D cosine neighbors,
-role-role similarity, and a neighborhood preservation score.
+The bundle includes selected feature metadata, UMAP/PCA coordinates, cosine neighbors, role-role similarity, and a neighborhood preservation score.
 
 ### 4.5. Fetch Neuronpedia descriptions (optional, cached)
 
@@ -255,7 +232,7 @@ Example (Gemma 3 27B layer-40 Gemmascope release):
 
 ```bash
 python pipeline/5_fetch_neuronpedia_cache.py \
-  --bundle-file outputs/viz_bundle/general_gemma3_layer40_mean_top5000/bundle.json \
+  --bundle-file outputs/viz_bundle/general_gemma3_layer40_mean_top2000/bundle.json \
   --neuronpedia-id gemma-3-27b-it/40-gemmascope-2-res-65k \
   --output-cache data/neuronpedia_cache.json
 ```
@@ -271,6 +248,22 @@ description_cache: "data/neuronpedia_cache.json"
 python pipeline/4_build_viz_bundle.py --config configs/visualization.yaml
 ```
 
+### 4.6 Export role-similarity heatmaps (optional, static + interactive)
+
+```bash
+python pipeline/6_export_role_similarity_heatmap.py \
+  --bundle-file outputs/viz_bundle/general_gemma3_layer40_mean_top2000/bundle.json \
+  --out-png docs/role_similarity_heatmap.png \
+  --out-html docs/role_similarity_heatmap_interactive.html \
+  --dpi 320
+```
+
+This produces:
+- `docs/role_similarity_heatmap.png` (high-resolution static figure)
+- `docs/role_similarity_heatmap_interactive.html` (interactive Plotly heatmap)
+
+Note: GitHub README cannot render interactive JavaScript plots inline. Link to the HTML file or serve it via GitHub Pages.
+
 ### 5. Run the interactive explorer
 
 The frontend lives in:
@@ -282,37 +275,3 @@ Serve `bundle.json` to the app root (or set `VITE_BUNDLE_URL` to a custom path),
 ```bash
 npm run dev
 ```
-
-## Configuration
-
-### `configs/generation.yaml`
-
-| Parameter | Default | Description |
-|---|---|---|
-| `model_name` | `google/gemma-3-27b-it` | HuggingFace model ID for response generation |
-| `question_mode` | `general` | `general` (shared questions) or `role_specific` (per-role questions) |
-| `prompt_indices` | `[0,1,2,3,4]` | Which instruction variants to use (0-indexed) |
-| `temperature` | `0.7` | Sampling temperature |
-| `max_tokens` | `512` | Max response length |
-| `max_model_len` | `2048` | vLLM context window |
-
-### `configs/extraction.yaml`
-
-| Parameter | Default | Description |
-|---|---|---|
-| `model_name` | `google/gemma-3-27b-it` | Model to run extraction through |
-| `sae_release` | `gemma-scope-2-27b-it-resid_post` | SAE model release identifier |
-| `sae_id` | `layer_40_width_65k_l0_medium` | Specific SAE: layer, width, and sparsity |
-| `token_selection` | `response_only` | `response_only` or `all` (which tokens to extract features from) |
-
-### `configs/aggregation.yaml`
-
-| Parameter | Description |
-|---|---|
-| `features_dir` | Path to per-role feature files from extraction |
-| `output_dir` | Where to write aggregated outputs |
-
-## Built On
-
-- [SAELens](https://github.com/jbloomAus/SAELens) &mdash; SAE loading and inference
-- [vLLM](https://github.com/vllm-project/vllm) &mdash; batch inference (optional, generation stage only)
