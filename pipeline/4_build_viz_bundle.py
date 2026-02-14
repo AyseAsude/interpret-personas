@@ -38,6 +38,7 @@ def main():
     logger.info(f"Features directory: {config.features_dir}")
     logger.info(f"Output directory: {config.output_dir}")
     logger.info(f"Aggregation strategy: {config.strategy}")
+    logger.info(f"Question-centering: {config.question_centering}")
     logger.info(f"Top-K selected features: {config.top_k}")
 
     build_visualization_bundle(config=config, logger=logger)

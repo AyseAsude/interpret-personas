@@ -164,6 +164,7 @@ class VisualizationConfig:
     features_dir: Path
     output_dir: Path
     strategy: str = "mean"
+    question_centering: bool = False
     top_k: int = 5000
     random_seed: int = 42
     split_seed: int = 42
@@ -204,6 +205,11 @@ class VisualizationConfig:
 
         if self.strategy not in ["mean", "max"]:
             raise ValueError(f"strategy must be 'mean' or 'max': {self.strategy}")
+        if self.question_centering and self.strategy != "mean":
+            raise ValueError(
+                "question_centering requires strategy='mean' "
+                "(row-aligned response demeaning is defined on mean_features)."
+            )
 
         if self.top_k <= 0:
             raise ValueError(f"top_k must be positive: {self.top_k}")

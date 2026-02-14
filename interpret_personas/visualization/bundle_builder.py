@@ -92,6 +92,7 @@ def _compute_split_half_stability(
     strategy: str,
     sae_dim: int,
     split_seed: int,
+    question_baseline: np.ndarray | None = None,
 ) -> np.ndarray:
     """Compute split-half stability for each SAE feature."""
     n_roles = len(role_names)
@@ -109,7 +110,7 @@ def _compute_split_half_stability(
         with np.load(role_file) as role_npz:
             if key not in role_npz:
                 raise KeyError(f"Missing key '{key}' in {role_file}")
-            response_features = role_npz[key]
+            response_features = role_npz[key].astype(np.float32, copy=False)
 
         if response_features.ndim != 2:
             raise ValueError(
@@ -124,14 +125,25 @@ def _compute_split_half_stability(
             raise ValueError(
                 f"Need at least 2 responses for split-half stability: {role_name}"
             )
+        if question_baseline is not None and response_features.shape != question_baseline.shape:
+            raise ValueError(
+                f"Question baseline shape mismatch for {role_name}: "
+                f"responses={response_features.shape}, baseline={question_baseline.shape}"
+            )
 
         indices = rng.permutation(response_features.shape[0])
         midpoint = response_features.shape[0] // 2
-        first_half = response_features[indices[:midpoint]]
-        second_half = response_features[indices[midpoint:]]
+        first_idx = indices[:midpoint]
+        second_idx = indices[midpoint:]
 
-        a_half[role_idx] = first_half.mean(axis=0)
-        b_half[role_idx] = second_half.mean(axis=0)
+        first_mean = response_features[first_idx].mean(axis=0)
+        second_mean = response_features[second_idx].mean(axis=0)
+        if question_baseline is not None:
+            first_mean -= question_baseline[first_idx].mean(axis=0)
+            second_mean -= question_baseline[second_idx].mean(axis=0)
+
+        a_half[role_idx] = first_mean
+        b_half[role_idx] = second_mean
 
     numerator = (a_half * b_half).sum(axis=0)
     denominator = np.linalg.norm(a_half, axis=0) * np.linalg.norm(b_half, axis=0)
@@ -143,6 +155,54 @@ def _compute_split_half_stability(
         where=denominator > 0,
     )
     return stability
+
+
+def _compute_question_baseline(
+    role_names: np.ndarray,
+    features_dir: Path,
+    strategy: str,
+    sae_dim: int,
+) -> np.ndarray:
+    """Compute cross-role response-row baseline for question centering."""
+    key = f"{strategy}_features"
+    total: np.ndarray | None = None
+    n_responses: int | None = None
+
+    for role_name in role_names:
+        role_file = features_dir / f"{role_name}.npz"
+        if not role_file.exists():
+            raise FileNotFoundError(f"Missing role feature file: {role_file}")
+
+        with np.load(role_file) as role_npz:
+            if key not in role_npz:
+                raise KeyError(f"Missing key '{key}' in {role_file}")
+            response_features = role_npz[key].astype(np.float32, copy=False)
+
+        if response_features.ndim != 2:
+            raise ValueError(
+                f"Expected 2D response features for {role_name}, got {response_features.shape}"
+            )
+        if response_features.shape[1] != sae_dim:
+            raise ValueError(
+                f"SAE dim mismatch for {role_name}: "
+                f"expected {sae_dim}, got {response_features.shape[1]}"
+            )
+
+        if total is None:
+            n_responses = response_features.shape[0]
+            total = np.zeros_like(response_features, dtype=np.float32)
+        elif response_features.shape[0] != n_responses:
+            raise ValueError(
+                f"Row-count mismatch for question centering in role {role_name}: "
+                f"expected {n_responses}, got {response_features.shape[0]}"
+            )
+
+        total += response_features
+
+    if total is None:
+        raise ValueError("No role responses available to compute question baseline.")
+
+    return total / float(len(role_names))
 
 
 def _compute_cosine_neighbors(x: np.ndarray, k: int) -> tuple[np.ndarray, np.ndarray]:
@@ -298,12 +358,22 @@ def build_visualization_bundle(config: VisualizationConfig, logger) -> Path:
     n_roles, sae_dim = features.shape
     logger.info(f"Role matrix shape: {features.shape}")
 
-    logger.info("Step 1/6: Applying log transform and basic variance filter...")
-    role_matrix = np.log1p(features)
+    if config.question_centering:
+        logger.info(
+            "Question-centering enabled: demeaning role means and split-halves by "
+            "cross-role response-row baseline."
+        )
+        # For role-level means, question-row demeaning collapses to subtracting
+        # the cross-role mean role vector.
+        role_matrix = features - features.mean(axis=0, keepdims=True)
+    else:
+        role_matrix = np.log1p(features)
+
+    logger.info("Step 1/6: Applying basic variance filter...")
     mu = role_matrix.mean(axis=0)
     sd = role_matrix.std(axis=0)
 
-    alive = mu > 0
+    alive = np.linalg.norm(role_matrix, axis=0) > 0 if config.question_centering else mu > 0
     sd_threshold = float(np.median(sd[alive])) if alive.any() else 0.0
     pass_basic = alive & (sd >= sd_threshold)
     logger.info(
@@ -312,13 +382,28 @@ def build_visualization_bundle(config: VisualizationConfig, logger) -> Path:
     )
 
     logger.info("Step 2/6: Computing split-half stability...")
+    question_baseline: np.ndarray | None = None
+    if config.question_centering:
+        question_baseline = _compute_question_baseline(
+            role_names=role_names,
+            features_dir=config.features_dir,
+            strategy=config.strategy,
+            sae_dim=sae_dim,
+        )
+        logger.info(
+            "Question baseline shape: %s (rows must be aligned across roles)",
+            question_baseline.shape,
+        )
     stability = _compute_split_half_stability(
         role_names=role_names,
         features_dir=config.features_dir,
         strategy=config.strategy,
         sae_dim=sae_dim,
         split_seed=config.split_seed,
+        question_baseline=question_baseline,
     )
+    # Large temporary matrix; release early before neighbor/projection steps.
+    question_baseline = None
 
     logger.info("Step 3/6: Ranking features by stability x variance...")
     score = stability * sd
@@ -333,14 +418,27 @@ def build_visualization_bundle(config: VisualizationConfig, logger) -> Path:
     x = role_matrix[:, selected].T.astype(np.float32, copy=False)
     preferred_role_idx = role_matrix[:, selected].argmax(axis=0)
     role_values_selected = role_matrix[:, selected]
+    role_values_for_top_roles = (
+        np.clip(role_values_selected, 0.0, None)
+        if config.question_centering
+        else role_values_selected
+    )
 
-    sorted_role_values = np.sort(role_values_selected, axis=0)
+    sorted_role_values = np.sort(
+        role_values_for_top_roles if config.question_centering else role_values_selected,
+        axis=0,
+    )
     top1 = sorted_role_values[-1]
     top2 = sorted_role_values[-2] if n_roles > 1 else np.zeros_like(top1)
     pref_ratio = np.divide(top1, np.maximum(top2, 1e-8))
 
     active_frac = (role_values_selected > 0).mean(axis=0)
-    cv = np.divide(sd[selected], np.maximum(mu[selected], 1e-8))
+    cv_denominator = (
+        np.maximum(np.abs(mu[selected]), 1e-8)
+        if config.question_centering
+        else np.maximum(mu[selected], 1e-8)
+    )
+    cv = np.divide(sd[selected], cv_denominator)
     mean_activation = features[:, selected].mean(axis=0)
     max_activation = features[:, selected].max(axis=0)
 
@@ -398,7 +496,7 @@ def build_visualization_bundle(config: VisualizationConfig, logger) -> Path:
                 "preferred_role_idx": int(preferred_role_idx[feature_row]),
                 "preferred_role": str(role_names[preferred_role_idx[feature_row]]),
                 "top_roles": _top_roles_for_feature(
-                    role_values_selected[:, feature_row], role_names, top_n=3
+                    role_values_for_top_roles[:, feature_row], role_names, top_n=3
                 ),
                 "metrics": {
                     "score": _safe_float(score[feature_id]),
@@ -427,6 +525,7 @@ def build_visualization_bundle(config: VisualizationConfig, logger) -> Path:
             "aggregated_file": str(config.aggregated_file),
             "features_dir": str(config.features_dir),
             "strategy": config.strategy,
+            "question_centering": bool(config.question_centering),
             "n_roles": int(n_roles),
             "sae_dim": int(sae_dim),
             "top_k": int(top_k),
@@ -441,6 +540,11 @@ def build_visualization_bundle(config: VisualizationConfig, logger) -> Path:
                 "alive_count": int(alive.sum()),
                 "pass_basic_count": int(pass_basic.sum()),
                 "sd_threshold": _safe_float(sd_threshold),
+                "role_matrix_mode": (
+                    "question_centered_mean"
+                    if config.question_centering
+                    else "log1p_role_mean"
+                ),
             },
         },
         "guardrails": {

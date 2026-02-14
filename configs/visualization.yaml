@@ -11,6 +11,9 @@ output_dir: "outputs/viz_bundle"
 
 # Selection and stability
 strategy: "mean"    # "mean" or "max"
+# When true, subtract a cross-role response-row baseline before selection and stability.
+# Requires strategy: "mean" and aligned response rows across roles.
+question_centering: true
 top_k: 2000
 split_seed: 42
 
