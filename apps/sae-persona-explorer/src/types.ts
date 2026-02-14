@@ -5,26 +5,12 @@ export type RoleTopEntry = {
   share: number;
 };
 
-export type FeatureMetrics = {
-  score: number;
-  stability: number;
-  sd: number;
-  mu: number;
-  pref_ratio: number;
-  active_frac: number;
-  cv: number;
-  mean_activation: number;
-  max_activation: number;
-  bridge_entropy: number;
-};
-
 export type FeatureRow = {
   feature_row: number;
   feature_id: number;
   preferred_role_idx: number;
   preferred_role: string;
   top_roles: RoleTopEntry[];
-  metrics: FeatureMetrics;
   description: string | null;
   neuronpedia_url: string | null;
 };
@@ -34,9 +20,13 @@ export type DatasetMeta = {
   aggregated_file: string;
   features_dir: string;
   strategy: "mean" | "max";
+  question_centering?: boolean;
   n_roles: number;
   sae_dim: number;
   top_k: number;
+  selection?: {
+    role_matrix_mode?: string;
+  };
 };
 
 export type GuardrailMeta = {
@@ -64,7 +54,6 @@ export type BundlePayload = {
 };
 
 export type LayoutMode = "umap" | "pca";
-export type ColorMode = "preferred_role" | "bridge_entropy" | "active_frac";
 
 export type FeaturePoint = FeatureRow & {
   x: number;

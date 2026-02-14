@@ -548,7 +548,7 @@ def build_visualization_bundle(config: VisualizationConfig, logger) -> Path:
             },
         },
         "guardrails": {
-            "note": "Use map for navigation only. Related features and role similarity use high-D cosine space.",
+            "note": "Use map for navigation only. Related features and role similarity use high-dimensional feature space.",
             "knn_overlap_at_k": int(config.quality_k),
             "knn_overlap_score": _safe_float(knn_overlap),
         },

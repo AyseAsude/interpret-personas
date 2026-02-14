@@ -45,17 +45,8 @@ export function interpolateColor(
   ];
 }
 
-export function colorForFeature(
-  point: FeaturePoint,
-  mode: "preferred_role" | "bridge_entropy" | "active_frac",
-): [number, number, number] {
-  if (mode === "preferred_role") {
-    return colorForRoleIndex(point.preferred_role_idx);
-  }
-  if (mode === "bridge_entropy") {
-    return interpolateColor(point.metrics.bridge_entropy, [253, 187, 45], [12, 130, 138]);
-  }
-  return interpolateColor(point.metrics.active_frac, [237, 248, 177], [44, 127, 184]);
+export function colorForFeature(point: FeaturePoint): [number, number, number] {
+  return colorForRoleIndex(point.preferred_role_idx);
 }
 
 export function fitOrthographicView(

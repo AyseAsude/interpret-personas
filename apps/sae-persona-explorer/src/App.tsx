@@ -1,10 +1,10 @@
 import type { ChangeEvent } from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import DeckGL from "@deck.gl/react";
 import { OrthographicView } from "@deck.gl/core";
 import { LineLayer, ScatterplotLayer } from "@deck.gl/layers";
 
-import type { BundlePayload, ColorMode, FeaturePoint, LayoutMode } from "./types";
+import type { BundlePayload, FeaturePoint, LayoutMode } from "./types";
 import {
   colorForFeature,
   fitOrthographicView,
@@ -31,62 +31,271 @@ type OriginPoint = {
 };
 
 type PanelTab = "feature" | "role" | "settings";
+type CenteringMode = "off" | "on";
+type ByMode<T> = Record<CenteringMode, T>;
 
-const BUNDLE_URL = import.meta.env.VITE_BUNDLE_URL ?? `${import.meta.env.BASE_URL}bundle.json`;
+const LEGACY_BUNDLE_URL = import.meta.env.VITE_BUNDLE_URL ?? `${import.meta.env.BASE_URL}bundle.json`;
+const NON_CENTERED_BUNDLE_URL = import.meta.env.VITE_BUNDLE_URL_NON_CENTERED ?? LEGACY_BUNDLE_URL;
+const CENTERED_BUNDLE_URL = import.meta.env.VITE_BUNDLE_URL_CENTERED ?? "";
+const BUNDLE_URLS: ByMode<string> = {
+  off: NON_CENTERED_BUNDLE_URL,
+  on: CENTERED_BUNDLE_URL,
+};
+
+const MODEL_NAME_OVERRIDES: Record<string, string> = {
+  "gemma-3-27b-it": "Gemma 3 27B IT",
+  "qwen-3-32b": "Qwen 3 32B",
+  "llama-3.3-70b": "Llama 3.3 70B",
+};
+
+function extractModelSlug(path: string): string | null {
+  const match = path.match(/\/([^/]+)_layer_\d+_width_[^/_]+_l0_[^/_]+(?:\/|$)/);
+  return match?.[1] ?? null;
+}
+
+function extractSaeId(path: string): string | null {
+  const match = path.match(/(layer_\d+_width_[^/_]+_l0_[^/_]+)/);
+  return match?.[1] ?? null;
+}
+
+function prettifyModelSlug(slug: string): string {
+  const override = MODEL_NAME_OVERRIDES[slug];
+  if (override) {
+    return override;
+  }
+  return slug
+    .split("-")
+    .map((part) => {
+      if (/^\d+b$/i.test(part)) {
+        return part.toUpperCase();
+      }
+      if (part === "it") {
+        return "IT";
+      }
+      if (/^\d+(\.\d+)?$/.test(part)) {
+        return part;
+      }
+      return `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`;
+    })
+    .join(" ");
+}
+
+function prettifySaeId(saeId: string): string {
+  const match = saeId.match(/^layer_(\d+)_width_([^_]+)_l0_(.+)$/);
+  if (!match) {
+    return saeId.replace(/_/g, " ");
+  }
+  return `Layer ${match[1]} · Width ${match[2]} · L0 ${match[3]}`;
+}
+
+function deriveModelAndSaeLabel(dataset: BundlePayload["dataset"] | null): {
+  model: string;
+  sae: string;
+} {
+  if (!dataset) {
+    return { model: "Not loaded", sae: "Not loaded" };
+  }
+  const source = `${dataset.features_dir ?? ""} ${dataset.aggregated_file ?? ""}`;
+  const modelSlug = extractModelSlug(source);
+  const saeId = extractSaeId(source);
+  return {
+    model: modelSlug ? prettifyModelSlug(modelSlug) : dataset.name,
+    sae: saeId ? prettifySaeId(saeId) : `${dataset.sae_dim.toLocaleString()} features`,
+  };
+}
+
+const HOW_TO_READ_ITEMS: Array<{ title: string; lines: string[] }> = [
+  {
+    title: "What each dot means",
+    lines: [
+      "Each dot is one SAE feature kept after filtering.",
+      "Selected features have relatively higher variance across roles (role-specific signal).",
+      "Selected features are also consistent within each role (not just prompt noise).",
+    ],
+  },
+  {
+    title: "Map distance vs high-D truth",
+    lines: [
+      "The 2D map is a simplified view for exploration.",
+      "Related features and role similarity are computed in high-dimensional feature space with cosine similarity.",
+    ],
+  },
+  {
+    title: "Question centering ON",
+    lines: [
+      "Technical: For each question index (across roles), subtracts the cross-role mean feature activation, then runs filtering/ranking on the residuals.",
+      "Intuition: Highlights residual role differences after removing shared prompt/question structure.",
+      "Use this when you want role-specific deviations from the common pattern.",
+    ],
+  },
+  {
+    title: "Question centering OFF",
+    lines: [
+      "Technical: No centering is applied; feature values are shown directly from log of role activations.",
+      "Intuition: Shows absolute activation patterns, including signal shared across roles.",
+      "Use this when you want overall activity by role.",
+    ],
+  },
+  {
+    title: "Settings options",
+    lines: [
+      "Layout: UMAP preserves local neighborhoods; PCA shows broad linear structure.",
+      "Preferred role colors each feature by the role with the strongest value in the active mode.",
+    ],
+  },
+  {
+    title: "Related features, preferred role, missing descriptions",
+    lines: [
+      "Related features are nearest neighbors in high-D cosine space, not nearest dots on the 2D map.",
+      "Preferred role depends on mode: OFF = highest absolute value, ON = largest positive residual.",
+      "Missing description usually means no Neuronpedia text was found in the local cache.",
+    ],
+  },
+];
+function helpCardId(title: string): string {
+  return `help-card-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}`;
+}
 
 export default function App() {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
-  const [bundle, setBundle] = useState<BundlePayload | null>(null);
-  const [loadError, setLoadError] = useState<string>("");
-  const [loading, setLoading] = useState<boolean>(true);
+  const selectedFeatureIdOnSwitchRef = useRef<number | null>(null);
+  const helpGlowTimeoutRef = useRef<number | null>(null);
+  const [bundleMode, setBundleMode] = useState<CenteringMode>("off");
+  const [bundles, setBundles] = useState<ByMode<BundlePayload | null>>({
+    off: null,
+    on: null,
+  });
+  const [loadErrors, setLoadErrors] = useState<ByMode<string>>({
+    off: "",
+    on: "",
+  });
+  const [loadingStates, setLoadingStates] = useState<ByMode<boolean>>({
+    off: false,
+    on: false,
+  });
   const [layoutMode, setLayoutMode] = useState<LayoutMode>("umap");
-  const [colorMode, setColorMode] = useState<ColorMode>("preferred_role");
   const [activeTab, setActiveTab] = useState<PanelTab>("feature");
   const [selectedFeatureRow, setSelectedFeatureRow] = useState<number | null>(null);
   const [hoverInfo, setHoverInfo] = useState<HoverInfo | null>(null);
   const [roleFocus, setRoleFocus] = useState<string>("");
   const [highlightRole, setHighlightRole] = useState<string | null>(null);
+  const [helpExpanded, setHelpExpanded] = useState<boolean>(true);
+  const [highlightedHelpTitle, setHighlightedHelpTitle] = useState<string | null>(null);
   const [viewState, setViewState] = useState<OrthoViewState>({
     target: [0, 0, 0],
     zoom: 0,
   });
   const [mapSize, setMapSize] = useState({ width: 1000, height: 700 });
 
-  useEffect(() => {
-    let isCancelled = false;
-    async function fetchBundle() {
-      setLoading(true);
-      setLoadError("");
+  const bundle = bundles[bundleMode];
+  const loading = loadingStates[bundleMode];
+  const loadError = loadErrors[bundleMode];
+  const activeBundleUrl = BUNDLE_URLS[bundleMode];
+  const centeredBundleFromUrlEnabled = Boolean(BUNDLE_URLS.on);
+  const centeredModeAvailable = centeredBundleFromUrlEnabled || Boolean(bundles.on);
+  const modeMismatch =
+    bundle !== null
+      ? (bundleMode === "on") !== Boolean(bundle.dataset.question_centering)
+      : false;
+  const headerLabels = useMemo(
+    () => deriveModelAndSaeLabel(bundle?.dataset ?? null),
+    [bundle?.dataset],
+  );
+
+  const loadBundle = useCallback(
+    async (mode: CenteringMode, force = false) => {
+      const url = BUNDLE_URLS[mode];
+      if (!url) {
+        setLoadErrors((prev) => ({
+          ...prev,
+          [mode]:
+            "No bundle URL configured for centered mode. " +
+            "Set VITE_BUNDLE_URL_CENTERED or upload a centered bundle JSON.",
+        }));
+        return;
+      }
+      if (!force && bundles[mode]) {
+        return;
+      }
+
+      setLoadingStates((prev) => ({ ...prev, [mode]: true }));
+      setLoadErrors((prev) => ({ ...prev, [mode]: "" }));
+
       try {
-        const response = await fetch(BUNDLE_URL);
+        const response = await fetch(url);
         if (!response.ok) {
-          throw new Error(
-            `Failed to fetch bundle from ${BUNDLE_URL} (${response.status})`,
-          );
+          throw new Error(`Failed to fetch bundle from ${url} (${response.status})`);
         }
         const payload = (await response.json()) as BundlePayload;
-        if (isCancelled) {
-          return;
-        }
-        setBundle(payload);
-        setRoleFocus(payload.roles[0] ?? "");
-        setSelectedFeatureRow(payload.features[0]?.feature_row ?? null);
+        setBundles((prev) => ({ ...prev, [mode]: payload }));
       } catch (error) {
-        if (!isCancelled) {
-          const message = error instanceof Error ? error.message : String(error);
-          setLoadError(message);
-        }
+        const message = error instanceof Error ? error.message : String(error);
+        setLoadErrors((prev) => ({ ...prev, [mode]: message }));
       } finally {
-        if (!isCancelled) {
-          setLoading(false);
-        }
+        setLoadingStates((prev) => ({ ...prev, [mode]: false }));
       }
+    },
+    [bundles],
+  );
+
+  useEffect(() => {
+    if (!bundles[bundleMode] && !loadingStates[bundleMode]) {
+      void loadBundle(bundleMode);
     }
-    fetchBundle();
+  }, [bundleMode, bundles, loadingStates, loadBundle]);
+
+  useEffect(() => {
+    if (!helpExpanded || !highlightedHelpTitle) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const card = document.getElementById(helpCardId(highlightedHelpTitle));
+      card?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+
+    if (helpGlowTimeoutRef.current !== null) {
+      window.clearTimeout(helpGlowTimeoutRef.current);
+    }
+    helpGlowTimeoutRef.current = window.setTimeout(() => {
+      setHighlightedHelpTitle((current) =>
+        current === highlightedHelpTitle ? null : current,
+      );
+      helpGlowTimeoutRef.current = null;
+    }, 2200);
+
     return () => {
-      isCancelled = true;
+      window.cancelAnimationFrame(frame);
+    };
+  }, [helpExpanded, highlightedHelpTitle]);
+
+  useEffect(() => {
+    return () => {
+      if (helpGlowTimeoutRef.current !== null) {
+        window.clearTimeout(helpGlowTimeoutRef.current);
+      }
     };
   }, []);
+
+  useEffect(() => {
+    if (!bundle) {
+      return;
+    }
+    setHoverInfo(null);
+    setHighlightRole((prev) => (prev && bundle.roles.includes(prev) ? prev : null));
+    setRoleFocus((prev) => (prev && bundle.roles.includes(prev) ? prev : bundle.roles[0] ?? ""));
+    setSelectedFeatureRow(() => {
+      const preferredFeatureId = selectedFeatureIdOnSwitchRef.current;
+      if (preferredFeatureId !== null) {
+        const match = bundle.features.find((feature) => feature.feature_id === preferredFeatureId);
+        selectedFeatureIdOnSwitchRef.current = null;
+        if (match) {
+          return match.feature_row;
+        }
+      }
+      return bundle.features[0]?.feature_row ?? null;
+    });
+  }, [bundle]);
 
   useEffect(() => {
     if (!mapContainerRef.current) {
@@ -151,18 +360,21 @@ export default function App() {
     }
     const preferred = bundle.features
       .filter((feature) => feature.preferred_role === roleFocus)
-      .sort((a, b) => b.metrics.score - a.metrics.score);
+      .sort(
+        (a, b) =>
+          (b.top_roles[0]?.share ?? 0) - (a.top_roles[0]?.share ?? 0),
+      );
     const roleIdx = bundle.roles.indexOf(roleFocus);
     const nearestRoles =
       roleIdx >= 0
         ? bundle.roles
-            .map((role, idx) => ({
-              role,
-              similarity: bundle.role_similarity[roleIdx]?.[idx] ?? 0,
-            }))
-            .filter((row) => row.role !== roleFocus)
-            .sort((a, b) => b.similarity - a.similarity)
-            .slice(0, 8)
+          .map((role, idx) => ({
+            role,
+            similarity: bundle.role_similarity[roleIdx]?.[idx] ?? 0,
+          }))
+          .filter((row) => row.role !== roleFocus)
+          .sort((a, b) => b.similarity - a.similarity)
+          .slice(0, 8)
         : [];
     return {
       preferredCount: preferred.length,
@@ -277,7 +489,7 @@ export default function App() {
         return 3.1;
       },
       getFillColor: (d) => {
-        const [r, g, b] = colorForFeature(d, colorMode);
+        const [r, g, b] = colorForFeature(d);
         const isDimmed = highlightRole !== null && d.preferred_role !== highlightRole;
         return [r, g, b, isDimmed ? 35 : 210];
       },
@@ -299,7 +511,7 @@ export default function App() {
         }
       },
       updateTriggers: {
-        getFillColor: [colorMode, highlightRole],
+        getFillColor: [highlightRole],
         getRadius: [selectedFeatureRow],
       },
     });
@@ -313,7 +525,7 @@ export default function App() {
       return [...axisLayers, baseLayer];
     }
 
-    const [selectedR, selectedG, selectedB] = colorForFeature(selectedPoint, colorMode);
+    const [selectedR, selectedG, selectedB] = colorForFeature(selectedPoint);
     const neighborPoints = points.filter(
       (point) =>
         point.feature_row !== selectedFeatureRow &&
@@ -330,11 +542,11 @@ export default function App() {
       getPosition: (d) => [d.x, d.y],
       getRadius: 8.4,
       getFillColor: (d) => {
-        const [r, g, b] = colorForFeature(d, colorMode);
+        const [r, g, b] = colorForFeature(d);
         return [r, g, b, 66];
       },
       updateTriggers: {
-        getFillColor: [colorMode, selectedFeatureRow],
+        getFillColor: [selectedFeatureRow],
       },
     });
 
@@ -351,7 +563,32 @@ export default function App() {
     });
 
     return [...axisLayers, neighborHueLayer, selectedHueLayer, baseLayer];
-  }, [bundle, points, colorMode, highlightRole, selectedFeatureRow, layoutMode]);
+  }, [bundle, points, highlightRole, selectedFeatureRow, layoutMode]);
+
+  function handleBundleModeChange(nextMode: CenteringMode) {
+    if (nextMode === bundleMode) {
+      return;
+    }
+    if (nextMode === "on" && !centeredModeAvailable) {
+      return;
+    }
+    selectedFeatureIdOnSwitchRef.current = selectedFeature?.feature_id ?? null;
+    setBundleMode(nextMode);
+    if (!bundles[nextMode] && !loadingStates[nextMode]) {
+      void loadBundle(nextMode);
+    }
+  }
+
+  function jumpToCenteringHelp() {
+    const targetTitle = bundleMode === "on" ? "Question centering ON" : "Question centering OFF";
+    setHelpExpanded(true);
+    setHighlightedHelpTitle(targetTitle);
+  }
+
+  function jumpToLayoutHelp() {
+    setHelpExpanded(true);
+    setHighlightedHelpTitle("Settings options");
+  }
 
   function handleBundleFileUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -362,13 +599,17 @@ export default function App() {
     reader.onload = () => {
       try {
         const payload = JSON.parse(String(reader.result)) as BundlePayload;
-        setBundle(payload);
-        setRoleFocus(payload.roles[0] ?? "");
-        setSelectedFeatureRow(payload.features[0]?.feature_row ?? null);
-        setLoadError("");
+        const inferredMode: CenteringMode = payload.dataset.question_centering ? "on" : "off";
+        selectedFeatureIdOnSwitchRef.current = null;
+        setBundles((prev) => ({ ...prev, [inferredMode]: payload }));
+        setLoadErrors((prev) => ({ ...prev, [inferredMode]: "" }));
+        setBundleMode(inferredMode);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        setLoadError(`Unable to parse uploaded JSON: ${message}`);
+        setLoadErrors((prev) => ({
+          ...prev,
+          [bundleMode]: `Unable to parse uploaded JSON: ${message}`,
+        }));
       }
     };
     reader.readAsText(file);
@@ -377,26 +618,86 @@ export default function App() {
   return (
     <div className="app-shell">
       <header className="topbar">
-        <div>
+        <div className="topbar-main">
           <h1>SAE Persona Feature Explorer</h1>
-          <p>
-            Map is navigation only. Related features and role similarity are computed in
-            high-dimensional role-profile space.
-          </p>
         </div>
         <div className="dataset-chip">
-          <span>Dataset</span>
-          <strong>{bundle?.dataset.name ?? "Not loaded"}</strong>
+          <div className="dataset-item">
+            <span>Model</span>
+            <strong>{headerLabels.model}</strong>
+          </div>
+          <div className="dataset-item">
+            <span>SAE</span>
+            <strong>{headerLabels.sae}</strong>
+          </div>
         </div>
       </header>
 
-      <main className="workspace">
+      <main className={`workspace ${helpExpanded ? "" : "help-collapsed"}`.trim()}>
+        <aside className={`help-panel ${helpExpanded ? "expanded" : "collapsed"}`}>
+          {helpExpanded ? (
+            <>
+              <div className="help-header">
+                <h2>How to read this map</h2>
+                <button
+                  className="help-toggle-btn"
+                  onClick={() => setHelpExpanded(false)}
+                  type="button"
+                  aria-expanded={true}
+                  aria-controls="how-to-read-content"
+                  aria-label="Collapse help panel"
+                  title="Collapse help panel"
+                >
+                  <span aria-hidden="true">&lt;</span>
+                </button>
+              </div>
+              <div className="help-content" id="how-to-read-content">
+                {HOW_TO_READ_ITEMS.map((item) => (
+                  <section
+                    className={`help-card ${highlightedHelpTitle === item.title ? "glow" : ""}`.trim()}
+                    id={helpCardId(item.title)}
+                    key={item.title}
+                  >
+                    <h3>{item.title}</h3>
+                    {item.lines.map((line) => (
+                      <p key={line}>{line}</p>
+                    ))}
+                  </section>
+                ))}
+                <p className="help-more">
+                  More details: <code>https://github.com/AyseAsude/interpret-personas/blob/master/README.md</code>.
+                </p>
+              </div>
+            </>
+          ) : (
+            <button
+              className="help-rail-btn"
+              onClick={() => setHelpExpanded(true)}
+              type="button"
+              aria-expanded={false}
+              aria-controls="how-to-read-content"
+              aria-label="Expand help panel"
+              title="Expand help panel"
+            >
+              <span aria-hidden="true">?</span>
+            </button>
+          )}
+        </aside>
+
         <section className="map-section" ref={mapContainerRef}>
-          {loading && <div className="load-overlay">Loading bundle from {BUNDLE_URL}...</div>}
+          {loading && (
+            <div className="load-overlay">
+              Loading {bundleMode === "on" ? "centered" : "non-centered"} bundle
+              {activeBundleUrl ? ` from ${activeBundleUrl}` : "..."}
+            </div>
+          )}
 
           {!loading && !bundle && (
             <div className="load-overlay">
-              <p>Could not load bundle from default URL.</p>
+              <p>
+                Could not load {bundleMode === "on" ? "centered" : "non-centered"} bundle.
+              </p>
+              {activeBundleUrl && <p>URL: {activeBundleUrl}</p>}
               {loadError && <p className="error-text">{loadError}</p>}
               <label className="upload-btn">
                 Load bundle JSON
@@ -424,7 +725,6 @@ export default function App() {
               <div className="map-stats">
                 <span>{bundle.features.length.toLocaleString()} selected features</span>
                 <span>{bundle.roles.length} roles</span>
-                <span>kNN overlap@{bundle.guardrails.knn_overlap_at_k}: {bundle.guardrails.knn_overlap_score.toFixed(3)}</span>
                 {layoutMode === "pca" && <span>PCA axes shown: PC1 horizontal, origin at (0, 0)</span>}
               </div>
             </>
@@ -434,7 +734,6 @@ export default function App() {
             <div className="tooltip" style={{ left: hoverInfo.x + 16, top: hoverInfo.y + 16 }}>
               <div className="tooltip-title">Feature #{hoverInfo.point.feature_id}</div>
               <div>Preferred role: {hoverInfo.point.preferred_role}</div>
-              <div>Score: {hoverInfo.point.metrics.score.toFixed(3)}</div>
               <div className="tooltip-roles">
                 {hoverInfo.point.top_roles.map((entry) => (
                   <span key={entry.role}>
@@ -471,168 +770,190 @@ export default function App() {
             </button>
           </nav>
 
-              {activeTab === "feature" && (
-                <div className="panel-content">
-                  {!selectedFeature && <p>Select a point to inspect its details.</p>}
+          {activeTab === "feature" && (
+            <div className="panel-content">
+              {!selectedFeature && <p>Select a point to inspect its details.</p>}
 
-                  {selectedFeature && (
-                    <>
-                      <h2>Feature #{selectedFeature.feature_id}</h2>
-                      <p className="badge">{selectedFeature.preferred_role}</p>
-                      <p>
-                        {selectedFeature.description ??
-                          "No cached description is available for this feature."}
-                      </p>
-                      {selectedFeatureNeuronpediaUrl && (
-                        <p>
-                          <a
-                            href={selectedFeatureNeuronpediaUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                          >
-                            Open Neuronpedia entry
-                          </a>
-                        </p>
-                      )}
-
-                      <h3>Top Role Activations</h3>
-                      <div className="mini-bars">
-                        {selectedFeature.top_roles.map((entry) => (
-                          <div className="mini-bar-row" key={entry.role}>
-                            <span>{entry.role}</span>
-                            <div className="mini-bar">
-                              <div
-                                className="mini-bar-fill"
-                                style={{ width: `${Math.max(4, entry.share * 100)}%` }}
-                              />
-                            </div>
-                            <span>{(entry.share * 100).toFixed(0)}%</span>
-                          </div>
-                        ))}
-                      </div>
-
-                      <h3>Metrics</h3>
-                      <dl className="metrics-grid">
-                        <dt>score</dt>
-                        <dd>{selectedFeature.metrics.score.toFixed(4)}</dd>
-                        <dt>stability</dt>
-                        <dd>{selectedFeature.metrics.stability.toFixed(4)}</dd>
-                        <dt>pref_ratio</dt>
-                        <dd>{selectedFeature.metrics.pref_ratio.toFixed(3)}</dd>
-                        <dt>active_frac</dt>
-                        <dd>{selectedFeature.metrics.active_frac.toFixed(3)}</dd>
-                        <dt>bridge_entropy</dt>
-                        <dd>{selectedFeature.metrics.bridge_entropy.toFixed(3)}</dd>
-                        <dt>mean_activation</dt>
-                        <dd>{selectedFeature.metrics.mean_activation.toFixed(3)}</dd>
-                      </dl>
-
-                      <h3>Related Features (high-D cosine)</h3>
-                      <ul className="neighbor-list">
-                        {relatedFeatures.map((entry) => (
-                          <li key={entry.feature.feature_row}>
-                            <button
-                              onClick={() => setSelectedFeatureRow(entry.feature.feature_row)}
-                            >
-                              #{entry.feature.feature_id} · {entry.feature.preferred_role}
-                              <span>{entry.sim.toFixed(3)}</span>
-                            </button>
-                          </li>
-                        ))}
-                      </ul>
-                    </>
-                  )}
-                </div>
-              )}
-
-              {activeTab === "role" && bundle && (
-                <div className="panel-content">
-                  <h2>Role explorer</h2>
-                  <label className="field">
-                    Role
-                    <select value={roleFocus} onChange={(e) => setRoleFocus(e.target.value)}>
-                      {bundle.roles.map((role) => (
-                        <option key={role} value={role}>
-                          {role}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="checkbox">
-                    <input
-                      type="checkbox"
-                      checked={highlightRole === roleFocus}
-                      onChange={(e) =>
-                        setHighlightRole(e.target.checked ? roleFocus : null)
-                      }
-                    />
-                    Highlight this role on map
-                  </label>
-
+              {selectedFeature && (
+                <>
+                  <h2>Feature #{selectedFeature.feature_id}</h2>
+                  <p className="badge">{selectedFeature.preferred_role}</p>
                   <p>
-                    Preferred features: <strong>{roleStats.preferredCount}</strong>
+                    {selectedFeature.description ??
+                      "No cached description is available for this feature."}
                   </p>
+                  {selectedFeatureNeuronpediaUrl && (
+                    <p>
+                      <a
+                        href={selectedFeatureNeuronpediaUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        Open Neuronpedia entry
+                      </a>
+                    </p>
+                  )}
 
-                  <h3>Nearest roles (high-D cosine)</h3>
-                  <ul className="plain-list">
-                    {roleStats.nearestRoles.map((entry) => (
-                      <li key={entry.role}>
+                  <h3>Top Role Activations</h3>
+                  <div className="mini-bars">
+                    {selectedFeature.top_roles.map((entry) => (
+                      <div className="mini-bar-row" key={entry.role}>
                         <span>{entry.role}</span>
-                        <span>{entry.similarity.toFixed(3)}</span>
-                      </li>
+                        <div className="mini-bar">
+                          <div
+                            className="mini-bar-fill"
+                            style={{ width: `${Math.max(4, entry.share * 100)}%` }}
+                          />
+                        </div>
+                        <span>{(entry.share * 100).toFixed(0)}%</span>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
 
-                  <h3>Top features for {roleFocus}</h3>
+                  <h3>Related Features</h3>
                   <ul className="neighbor-list">
-                    {roleStats.topFeatures.map((feature) => (
-                      <li key={feature.feature_row}>
-                        <button onClick={() => setSelectedFeatureRow(feature.feature_row)}>
-                          #{feature.feature_id}
-                          <span>{feature.metrics.score.toFixed(3)}</span>
+                    {relatedFeatures.map((entry) => (
+                      <li key={entry.feature.feature_row}>
+                        <button
+                          onClick={() => setSelectedFeatureRow(entry.feature.feature_row)}
+                        >
+                          #{entry.feature.feature_id} · {entry.feature.preferred_role}
+                          <span>{entry.sim.toFixed(3)}</span>
                         </button>
                       </li>
                     ))}
                   </ul>
-                </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {activeTab === "role" && bundle && (
+            <div className="panel-content">
+              <h2>Role explorer</h2>
+              <label className="field">
+                Role
+                <select value={roleFocus} onChange={(e) => setRoleFocus(e.target.value)}>
+                  {bundle.roles.map((role) => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="checkbox">
+                <input
+                  type="checkbox"
+                  checked={highlightRole === roleFocus}
+                  onChange={(e) =>
+                    setHighlightRole(e.target.checked ? roleFocus : null)
+                  }
+                />
+                Highlight this role on map
+              </label>
+
+              <p>
+                Total features on the map: <strong>{roleStats.preferredCount}</strong>
+              </p>
+
+              <h3>Nearest roles</h3>
+              <ul className="plain-list">
+                {roleStats.nearestRoles.map((entry) => (
+                  <li key={entry.role}>
+                    <span>{entry.role}</span>
+                    <span>{entry.similarity.toFixed(3)}</span>
+                  </li>
+                ))}
+              </ul>
+
+              <h3>Top features for {roleFocus}</h3>
+              <ul className="neighbor-list">
+                {roleStats.topFeatures.map((feature) => (
+                  <li key={feature.feature_row}>
+                    <button onClick={() => setSelectedFeatureRow(feature.feature_row)}>
+                      #{feature.feature_id}
+                      <span>{((feature.top_roles[0]?.share ?? 0) * 100).toFixed(0)}%</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {activeTab === "settings" && bundle && (
+            <div className="panel-content">
+              <h2>Layout & quality</h2>
+              <label className="field">
+                <span className="field-label with-help">
+                  Question centering
+                  <button
+                    className="inline-help-btn"
+                    type="button"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      jumpToCenteringHelp();
+                    }}
+                    aria-label="Show question centering help"
+                    title="Show question centering help"
+                  >
+                    <span aria-hidden="true">?</span>
+                  </button>
+                </span>
+                <select
+                  value={bundleMode}
+                  onChange={(e) => handleBundleModeChange(e.target.value as CenteringMode)}
+                >
+                  <option value="off">Off (non-centered)</option>
+                  <option value="on" disabled={!centeredModeAvailable}>
+                    On (question-centered)
+                  </option>
+                </select>
+              </label>
+              {!centeredModeAvailable && (
+                <p>
+                  Centered bundle URL not configured. Set `VITE_BUNDLE_URL_CENTERED` or upload
+                  a centered bundle JSON.
+                </p>
+              )}
+              {modeMismatch && (
+                <p className="error-text">
+                  Active mode and bundle metadata disagree. Verify bundle URLs.
+                </p>
               )}
 
-              {activeTab === "settings" && bundle && (
-                <div className="panel-content">
-                  <h2>Layout & quality</h2>
-                  <label className="field">
-                    Layout
-                    <select
-                      value={layoutMode}
-                      onChange={(e) => setLayoutMode(e.target.value as LayoutMode)}
-                    >
-                      <option value="umap">UMAP</option>
-                      <option value="pca">PCA</option>
-                    </select>
-                  </label>
+              <label className="field">
+                <span className="field-label with-help">
+                  Layout
+                  <button
+                    className="inline-help-btn"
+                    type="button"
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      jumpToLayoutHelp();
+                    }}
+                    aria-label="Show layout help"
+                    title="Show layout help"
+                  >
+                    <span aria-hidden="true">?</span>
+                  </button>
+                </span>
+                <select
+                  value={layoutMode}
+                  onChange={(e) => setLayoutMode(e.target.value as LayoutMode)}
+                >
+                  <option value="umap">UMAP</option>
+                  <option value="pca">PCA</option>
+                </select>
+              </label>
 
-                  <label className="field">
-                    Color mode
-                    <select
-                      value={colorMode}
-                      onChange={(e) => setColorMode(e.target.value as ColorMode)}
-                    >
-                      <option value="preferred_role">Preferred role</option>
-                      <option value="bridge_entropy">Bridge entropy</option>
-                      <option value="active_frac">Active fraction</option>
-                    </select>
-                  </label>
-
-                  <div className="quality-card">
-                    <p>{bundle.guardrails.note}</p>
-                    <p>
-                      Neighborhood preservation @k={bundle.guardrails.knn_overlap_at_k}:{" "}
-                      <strong>{bundle.guardrails.knn_overlap_score.toFixed(3)}</strong>
-                    </p>
-                  </div>
-                </div>
-              )}
+              <div className="quality-card">
+                <p>{bundle.guardrails.note}</p>
+              </div>
+            </div>
+          )}
         </aside>
       </main>
     </div>
