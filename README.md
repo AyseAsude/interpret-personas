@@ -13,6 +13,7 @@
 Maps which SAE (Sparse Autoencoder) features activate under which personas. Given a set of roles, this pipeline generates role-prompted LLM responses, extracts interpretable SAE features from those responses, and aggregates them into per-role feature vectors. The current dataset uses 50 roles selected from the 276 available in [assistant-axis](https://github.com/safety-research/assistant-axis/).
 
 The `notebooks/select_features.ipynb` notebook walks through the feature selection and visualization methodology interactively with plots.
+The `notebooks/persona_drift.ipynb` notebook adds turn-level persona drift analysis in SAE feature space.
 
 ### Role Similarity Heatmap
 
@@ -248,30 +249,26 @@ description_cache: "data/neuronpedia_cache.json"
 python pipeline/4_build_viz_bundle.py --config configs/visualization.yaml
 ```
 
-### 4.6 Export role-similarity heatmaps (optional, static + interactive)
+### 5. Run the interactive explorers
 
-```bash
-python pipeline/6_export_role_similarity_heatmap.py \
-  --bundle-file outputs/viz_bundle/general_gemma3_layer40_mean_top2000/bundle.json \
-  --out-png docs/role_similarity_heatmap.png \
-  --out-html docs/role_similarity_heatmap_interactive.html \
-  --dpi 320
-```
-
-This produces:
-- `docs/role_similarity_heatmap.png` (high-resolution static figure)
-- `docs/role_similarity_heatmap_interactive.html` (interactive Plotly heatmap)
-
-Note: GitHub README cannot render interactive JavaScript plots inline. Link to the HTML file or serve it via GitHub Pages.
-
-### 5. Run the interactive explorer
-
-The frontend lives in:
+The unified frontend lives in:
 
 `apps/sae-persona-explorer`
 
-Serve `bundle.json` to the app root (or set `VITE_BUNDLE_URL` to a custom path), then run:
+Start it with:
 
 ```bash
+cd apps/sae-persona-explorer
 npm run dev
 ```
+
+Routes:
+- SAE explorer: `/#/` (default)
+- Persona drift explorer: `/#/persona-drift`
+
+SAE bundle files are read from `apps/sae-persona-explorer/public/`.
+
+Persona drift files are read from `apps/sae-persona-explorer/public/persona-drift/`.
+For multi-run mode, provide `runs_manifest.json` in that folder and point each run entry to
+its own `ui_bundle/conversation/summary` URLs. The UI label is read from
+`conversation_name` in each manifest run entry.
