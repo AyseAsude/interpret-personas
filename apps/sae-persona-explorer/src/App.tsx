@@ -41,6 +41,12 @@ const BUNDLE_URLS: ByMode<string> = {
   off: NON_CENTERED_BUNDLE_URL,
   on: CENTERED_BUNDLE_URL,
 };
+const PERSONA_DRIFT_URL = import.meta.env.VITE_PERSONA_DRIFT_URL ?? "#/persona-drift";
+const GITHUB_ALLOWED_HOSTS = new Set<string>(["github.com", "www.github.com"]);
+const GITHUB_PROFILE_URL = sanitizeExternalUrl(
+  import.meta.env.VITE_GITHUB_PROFILE_URL ?? "https://github.com/AyseAsude/interpret-personas",
+  GITHUB_ALLOWED_HOSTS,
+);
 
 const MODEL_NAME_OVERRIDES: Record<string, string> = {
   "gemma-3-27b-it": "Gemma 3 27B IT",
@@ -85,7 +91,12 @@ function prettifySaeId(saeId: string): string {
   if (!match) {
     return saeId.replace(/_/g, " ");
   }
-  return `Layer ${match[1]} · Width ${match[2]} · L0 ${match[3]}`;
+  const l0Label = match[3]
+    .replace(/_/g, " ")
+    .replace(/\boutputs?\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  return `Layer ${match[1]} · Width ${match[2]} · L0 ${l0Label}`;
 }
 
 function deriveModelAndSaeLabel(dataset: BundlePayload["dataset"] | null): {
@@ -620,6 +631,25 @@ export default function App() {
       <header className="topbar">
         <div className="topbar-main">
           <h1>SAE Persona Feature Explorer</h1>
+          <div className="topbar-link-row">
+            <a className="topbar-nav-link" href={PERSONA_DRIFT_URL}>
+              Open Persona Drift Explorer
+            </a>
+            {GITHUB_PROFILE_URL && (
+              <a
+                className="topbar-icon-link"
+                href={GITHUB_PROFILE_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Open GitHub repository"
+                title="Open GitHub repository"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 .5C5.73.5.75 5.48.75 11.75c0 5.02 3.24 9.28 7.74 10.78.57.1.78-.25.78-.56 0-.27-.01-1.17-.02-2.12-3.15.68-3.82-1.34-3.82-1.34-.51-1.3-1.26-1.64-1.26-1.64-1.03-.71.08-.7.08-.7 1.13.08 1.73 1.17 1.73 1.17 1.01 1.72 2.65 1.22 3.29.93.1-.73.39-1.22.71-1.5-2.51-.29-5.15-1.26-5.15-5.61 0-1.24.44-2.25 1.17-3.05-.12-.29-.51-1.45.11-3.02 0 0 .95-.3 3.1 1.16a10.8 10.8 0 0 1 5.64 0c2.15-1.46 3.1-1.16 3.1-1.16.62 1.57.23 2.73.11 3.02.73.8 1.17 1.81 1.17 3.05 0 4.36-2.65 5.31-5.17 5.59.4.35.76 1.02.76 2.07 0 1.5-.01 2.7-.01 3.06 0 .31.2.67.79.56 4.49-1.5 7.73-5.76 7.73-10.78C23.25 5.48 18.27.5 12 .5Z" />
+                </svg>
+              </a>
+            )}
+          </div>
         </div>
         <div className="dataset-chip">
           <div className="dataset-item">
@@ -951,6 +981,10 @@ export default function App() {
 
               <div className="quality-card">
                 <p>{bundle.guardrails.note}</p>
+                <p className="quality-metric">
+                  Neighborhood preservation at k={bundle.guardrails.knn_overlap_at_k}:{" "}
+                  <strong>{bundle.guardrails.knn_overlap_score.toFixed(3)}</strong>
+                </p>
               </div>
             </div>
           )}

@@ -1,0 +1,98 @@
+{
+  "run_name": "gemma-3-27b-it_20260216_223856_2f05df1a8f",
+  "conversation_name": "Therapy",
+  "timestamp_utc": "2026-02-16T22:38:56.785537+00:00",
+  "config": {
+    "model_name": "google/gemma-3-27b-it",
+    "sae_release": "gemma-scope-2-27b-it-res",
+    "sae_id": "layer_40_width_65k_l0_medium",
+    "target_layer": 40,
+    "pooling": "mean",
+    "transform": "log1p",
+    "use_centering": false,
+    "center_turns_with_role_mean": false,
+    "use_l2_normalize": false,
+    "axis_method": "diff",
+    "other_group": "all_other_roles",
+    "assistant_role": "assistant",
+    "score_method": "projection",
+    "top_k_roles": 5,
+    "transition_pick": "largest_drop",
+    "manual_turn": null,
+    "top_features": 20,
+    "token_heat_percentiles": [
+      5,
+      95
+    ],
+    "confound_warn_abs_corr": 0.4,
+    "confound_high_abs_corr": 0.7
+  },
+  "selection": {
+    "selected_turn": 12,
+    "selected_prev_turn": 11,
+    "selected_delta_score": -8.175936698913574,
+    "selected_delta_projection": -8.175936698913574
+  },
+  "diagnostics": {
+    "max_abs_corr_selected_score": 0.6515523948020293,
+    "confound_verdict": "MODERATE",
+    "selected_score_diag": [
+      {
+        "metric": "turn_l2_raw",
+        "score_method": "projection",
+        "corr(score, metric)": -0.6515523948020293
+      },
+      {
+        "metric": "turn_nonzero_raw",
+        "score_method": "projection",
+        "corr(score, metric)": 0.26573189786413004
+      },
+      {
+        "metric": "turn_l2_space",
+        "score_method": "projection",
+        "corr(score, metric)": 0.5587952623585682
+      },
+      {
+        "metric": "turn_nonzero_space",
+        "score_method": "projection",
+        "corr(score, metric)": 0.26573189786413004
+      }
+    ],
+    "score_mass_diag": [
+      {
+        "metric": "turn_l2_raw",
+        "score_method": "projection",
+        "corr(score, metric)": -0.6515523948020293
+      },
+      {
+        "metric": "turn_nonzero_raw",
+        "score_method": "projection",
+        "corr(score, metric)": 0.26573189786413004
+      },
+      {
+        "metric": "turn_l2_space",
+        "score_method": "projection",
+        "corr(score, metric)": 0.5587952623585682
+      },
+      {
+        "metric": "turn_nonzero_space",
+        "score_method": "projection",
+        "corr(score, metric)": 0.26573189786413004
+      }
+    ],
+    "feature_event_summary": {
+      "selected_turn": 12,
+      "prev_turn": 11,
+      "delta_score": -8.175936698913574,
+      "away_mass": 19.923056505737875,
+      "toward_mass": 11.747120075003892,
+      "top_away_share": 0.06433573132049306,
+      "effect_strength": "WEAK"
+    }
+  },
+  "files": {
+    "conversation": "conversation.json",
+    "summary": "summary.json",
+    "ui_bundle": "ui_bundle.json"
+  }
+}

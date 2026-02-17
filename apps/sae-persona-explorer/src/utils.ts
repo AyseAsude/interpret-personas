@@ -28,6 +28,8 @@ export type OrthoViewState = {
   zoom: number;
 };
 
+const DEFAULT_ALLOWED_EXTERNAL_HOSTS = new Set<string>(["neuronpedia.org"]);
+
 export function colorForRoleIndex(idx: number): [number, number, number] {
   return ROLE_PALETTE[idx % ROLE_PALETTE.length];
 }
@@ -86,7 +88,10 @@ export function fitOrthographicView(
   };
 }
 
-export function sanitizeExternalUrl(rawUrl: string | null | undefined): string | null {
+export function sanitizeExternalUrl(
+  rawUrl: string | null | undefined,
+  allowedHosts: ReadonlySet<string> = DEFAULT_ALLOWED_EXTERNAL_HOSTS,
+): string | null {
   if (!rawUrl) {
     return null;
   }
@@ -102,7 +107,8 @@ export function sanitizeExternalUrl(rawUrl: string | null | undefined): string |
     return null;
   }
 
-  if (parsed.hostname !== "neuronpedia.org") {
+  const hostname = parsed.hostname.toLowerCase();
+  if (!allowedHosts.has(hostname)) {
     return null;
   }
 

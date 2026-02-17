@@ -1,0 +1,19 @@
+{
+  "default_run_id": "run_a",
+  "runs": [
+    {
+      "id": "run_a",
+      "label": "Run A",
+      "conversation_name": "Therapy",
+      "ui_bundle_url": "/runs/run_a/ui_bundle.json",
+      "conversation_url": "/runs/run_a/conversation.json"
+    },
+    {
+      "id": "run_b",
+      "label": "Run B",
+      "conversation_name": "Jailbreak",
+      "ui_bundle_url": "/runs/run_b/ui_bundle.json",
+      "conversation_url": "/runs/run_b/conversation.json"
+    }
+  ]
+}

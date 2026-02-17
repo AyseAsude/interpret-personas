@@ -1,0 +1,53 @@
+{
+  "default_run_id": "gemma-3-27b-it_20260216_223856_2f05df1a8f",
+  "runs": [
+    {
+      "id": "gemma-3-27b-it_20260216_223357_272ffe660f",
+      "label": "gemma-3-27b-it_20260216_223357_272ffe660f",
+      "conversation_name": "Delusion",
+      "ui_bundle_url": "/runs/gemma-3-27b-it_20260216_223357_272ffe660f/ui_bundle.json",
+      "conversation_url": "/runs/gemma-3-27b-it_20260216_223357_272ffe660f/conversation.json",
+      "summary_url": "/runs/gemma-3-27b-it_20260216_223357_272ffe660f/summary.json"
+    },
+    {
+      "id": "gemma-3-27b-it_20260216_223447_a44e22d80f",
+      "label": "gemma-3-27b-it_20260216_223447_a44e22d80f",
+      "conversation_name": "Jailbreak",
+      "ui_bundle_url": "/runs/gemma-3-27b-it_20260216_223447_a44e22d80f/ui_bundle.json",
+      "conversation_url": "/runs/gemma-3-27b-it_20260216_223447_a44e22d80f/conversation.json",
+      "summary_url": "/runs/gemma-3-27b-it_20260216_223447_a44e22d80f/summary.json"
+    },
+    {
+      "id": "gemma-3-27b-it_20260216_223609_596398cf6c",
+      "label": "gemma-3-27b-it_20260216_223609_596398cf6c",
+      "conversation_name": "Self-harm",
+      "ui_bundle_url": "/runs/gemma-3-27b-it_20260216_223609_596398cf6c/ui_bundle.json",
+      "conversation_url": "/runs/gemma-3-27b-it_20260216_223609_596398cf6c/conversation.json",
+      "summary_url": "/runs/gemma-3-27b-it_20260216_223609_596398cf6c/summary.json"
+    },
+    {
+      "id": "gemma-3-27b-it_20260216_223728_ef3ece4c1c",
+      "label": "gemma-3-27b-it_20260216_223728_ef3ece4c1c",
+      "conversation_name": "Coding",
+      "ui_bundle_url": "/runs/gemma-3-27b-it_20260216_223728_ef3ece4c1c/ui_bundle.json",
+      "conversation_url": "/runs/gemma-3-27b-it_20260216_223728_ef3ece4c1c/conversation.json",
+      "summary_url": "/runs/gemma-3-27b-it_20260216_223728_ef3ece4c1c/summary.json"
+    },
+    {
+      "id": "gemma-3-27b-it_20260216_223817_674045d24a",
+      "label": "gemma-3-27b-it_20260216_223817_674045d24a",
+      "conversation_name": "Philosophy",
+      "ui_bundle_url": "/runs/gemma-3-27b-it_20260216_223817_674045d24a/ui_bundle.json",
+      "conversation_url": "/runs/gemma-3-27b-it_20260216_223817_674045d24a/conversation.json",
+      "summary_url": "/runs/gemma-3-27b-it_20260216_223817_674045d24a/summary.json"
+    },
+    {
+      "id": "gemma-3-27b-it_20260216_223856_2f05df1a8f",
+      "label": "gemma-3-27b-it_20260216_223856_2f05df1a8f",
+      "conversation_name": "Therapy",
+      "ui_bundle_url": "/runs/gemma-3-27b-it_20260216_223856_2f05df1a8f/ui_bundle.json",
+      "conversation_url": "/runs/gemma-3-27b-it_20260216_223856_2f05df1a8f/conversation.json",
+      "summary_url": "/runs/gemma-3-27b-it_20260216_223856_2f05df1a8f/summary.json"
+    }
+  ]
+}

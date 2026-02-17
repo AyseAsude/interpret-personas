@@ -1,4 +1,4 @@
-name: Deploy SAE Persona Explorer to GitHub Pages
+name: Deploy Unified Explorer to GitHub Pages
 
 on:
   push:
@@ -45,7 +45,10 @@ jobs:
       - name: Build Static Site
         working-directory: apps/sae-persona-explorer
         env:
+          VITE_GIT_SHA: ${{ github.sha }}
           VITE_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+          VITE_BUNDLE_URL_NON_CENTERED: bundle_non_centered.json
+          VITE_BUNDLE_URL_CENTERED: bundle_centered.json
         run: npm run build
 
       - name: Upload Pages Artifact

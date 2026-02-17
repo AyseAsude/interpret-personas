@@ -7,10 +7,20 @@
 </p>
 
 <p align="center">
-  <img src="figures/demo.png" alt="SAE Persona Explorer" width="800" />
+  <img src="figures/sae_explorer.png" alt="SAE Persona Explorer" width="800" />
 </p>
 
-Maps which SAE (Sparse Autoencoder) features activate under which personas. Given a set of roles, this pipeline generates role-prompted LLM responses, extracts interpretable SAE features from those responses, and aggregates them into per-role feature vectors. The current dataset uses 50 roles selected from the 276 available in [assistant-axis](https://github.com/safety-research/assistant-axis/).
+<p align="center">
+  <img src="figures/drift_explorer.png" alt="Persona Drift Explorer" width="800" />
+</p>
+
+This repository studies how personas shape model behavior through a mechanistic interpretability lens, using SAE-based feature analysis and conversation-level drift tracking.
+
+It includes:
+  - **SAE Persona Explorer** maps which SAE (Sparse Autoencoder) features are most associated with each persona.
+  - **Persona Drift Explorer** tracks turn-by-turn drift within a conversation and surfaces the features driving each shift.
+
+Given a set of roles, the pipeline generates role-prompted responses, extracts interpretable SAE features, and aggregates them into per-role feature vectors. The current dataset uses 50 roles selected from the 276 roles in [assistant-axis](https://github.com/safety-research/assistant-axis/).
 
 The `notebooks/select_features.ipynb` notebook walks through the feature selection and visualization methodology interactively with plots.
 The `notebooks/persona_drift.ipynb` notebook adds turn-level persona drift analysis in SAE feature space.
@@ -22,9 +32,9 @@ Roles that are semantically close tend to have high cosine similarity (e.g., men
   <img src="figures/role_similarity_heatmap.png" alt="Role-role similarity heatmap" width="800" />
 </p>
 
-### PCA Role Axes (Assistant Axis)
+### PCA Role Axes
 
-**PC1**: The assistant role lies near one endpoint. Roles can be ordered along PC1 from assistant-like to role-play-heavy. Later PCs capture independent variation (style, domain, formality) where assistant sits near the middle with no special position. This is consistent with [Lu et al.](https://arxiv.org/pdf/2601.10387), who interpret PC1 as an axis of “similarity to default assistant behavior.” **Notably, both model activations and interpretable features support the same interpretation.**
+**PC1**: The assistant role lies near one endpoint. Roles can be ordered along PC1 from assistant-like to role-play-heavy. Later PCs capture independent variation where assistant sits near the middle with no special position. This is consistent with [Lu et al.](https://arxiv.org/pdf/2601.10387), who interpret PC1 as an axis of “similarity to default assistant behavior.” **Notably, both model activations and interpretable features support the same interpretation.**
 
 <p align="center">
   <img src="figures/role_pca_axes.png" alt="Projection of role vectors to the PCA components" width="800" />

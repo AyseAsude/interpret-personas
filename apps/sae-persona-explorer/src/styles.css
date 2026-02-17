@@ -7,6 +7,12 @@
   --accent: #0b6e4f;
   --accent-soft: #d7efe6;
   --warning: #9d2b25;
+  --topbar-action-bg: #f8fbf5;
+  --topbar-action-border: #b9ccc0;
+  --topbar-action-text: #1d4838;
+  --topbar-action-hover-bg: #e7f3eb;
+  --topbar-action-hover-border: #8fb5a3;
+  --topbar-action-focus: #7cab97;
 }
 
 * {
@@ -52,6 +58,76 @@ a {
   grid-column: 1;
   justify-self: start;
   text-align: left;
+}
+
+.topbar-link-row {
+  margin-top: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.topbar-nav-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--topbar-action-border);
+  border-radius: 10px;
+  background: var(--topbar-action-bg);
+  box-shadow: 0 1px 0 rgba(20, 40, 29, 0.04);
+  color: var(--topbar-action-text);
+  height: 30px;
+  padding: 0 12px;
+  font-size: 0.76rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+}
+
+.topbar-nav-link:hover {
+  border-color: var(--topbar-action-hover-border);
+  background: var(--topbar-action-hover-bg);
+  box-shadow: 0 1px 0 rgba(20, 40, 29, 0.05);
+  color: var(--topbar-action-text);
+  text-decoration: none;
+}
+
+.topbar-icon-link {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--topbar-action-border);
+  border-radius: 10px;
+  background: var(--topbar-action-bg);
+  box-shadow: 0 1px 0 rgba(20, 40, 29, 0.04);
+  color: var(--topbar-action-text);
+  text-decoration: none;
+  flex: 0 0 auto;
+}
+
+.topbar-icon-link:hover {
+  border-color: var(--topbar-action-hover-border);
+  background: var(--topbar-action-hover-bg);
+  box-shadow: 0 1px 0 rgba(20, 40, 29, 0.05);
+  color: var(--topbar-action-text);
+  text-decoration: none;
+}
+
+.topbar-icon-link svg {
+  width: 15px;
+  height: 15px;
+  fill: currentColor;
+}
+
+.topbar-nav-link:focus-visible,
+.topbar-icon-link:focus-visible {
+  outline: 2px solid var(--topbar-action-focus);
+  outline-offset: 1px;
+  border-color: var(--topbar-action-focus);
+  box-shadow: 0 1px 0 rgba(20, 40, 29, 0.05);
 }
 
 .topbar h1 {
@@ -509,6 +585,16 @@ a {
   border-radius: 10px;
   padding: 10px;
   background: #fdfaf0;
+  display: grid;
+  gap: 8px;
+}
+
+.quality-card p {
+  margin: 0;
+}
+
+.quality-metric {
+  font-size: 0.84rem;
 }
 
 @media (max-width: 920px) {
