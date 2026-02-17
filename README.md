@@ -258,27 +258,3 @@ description_cache: "data/neuronpedia_cache.json"
 ```bash
 python pipeline/4_build_viz_bundle.py --config configs/visualization.yaml
 ```
-
-### 5. Run the interactive explorers
-
-The unified frontend lives in:
-
-`apps/sae-persona-explorer`
-
-Start it with:
-
-```bash
-cd apps/sae-persona-explorer
-npm run dev
-```
-
-Routes:
-- SAE explorer: `/#/` (default)
-- Persona drift explorer: `/#/persona-drift`
-
-SAE bundle files are read from `apps/sae-persona-explorer/public/`.
-
-Persona drift files are read from `apps/sae-persona-explorer/public/persona-drift/`.
-For multi-run mode, provide `runs_manifest.json` in that folder and point each run entry to
-its own `ui_bundle/conversation/summary` URLs. The UI label is read from
-`conversation_name` in each manifest run entry.
